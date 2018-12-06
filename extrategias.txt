@@ -1,0 +1,47 @@
+:::::::::::::::::::::::::::RECUPERAR LOG::::::::::::::::::::::::::::::::::::::::::::::
+
+=======COORDENADOR=========
+se tem:
+
+# I -> mandar mensagem para todos os envolvidos
+# I(C|A) -> mandar resultado para todos os envolvidos
+# I(C|A)F -> não fazer nada
+
+penso que basta apenas olhar para o último resultado
+
+=======PARTICIPANTE=========
+se tem:
+
+# P -> mandar resposta ao coordenador (P)
+# A -> mandar resposta ao coordenador (A)
+# P(A|C) -> mandar ok ao coordenador
+
+penso que basta apenas olhar para o último resultado (mesmo no caso do A pq apenas acrescenta uma resposta)
+
+
+::::::::::::::::::::::::::::::::::::APAGAR LOG::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+=======COORDENADOR=======
+Podemos apagar caso:
+
+# P(C|A) -> podemos apagar o P
+# (C|A)F -> podemos apagar o (C|A), o F apenas podemos apagar caso não seja a última
+
+========PARTICIPANTE=======
+Podemos apagar caso:
+
+# PC -> podemos apagar
+# PA -> podemos apagar
+# AA -> podemos apagar (se calhar só com 1 podemos apagar???)
+
+
+========ESTRATEGIA=========
+
+-> A ideia passa por ter 1 mapa que por cada transacao tem um mapa em que a chave é o idT e o valor é: resposta => local onde pode apagar
+
+-> Para cada caso descrito acima, pode-se ver quando apagar (tendo sempre de ver o local minimo do mapa)
+Quando se tem a resposta pode-se apagar o P dessa transacao
+Quando se tem confirmacao pode-se apagar: o (C|A) dessa transacao e os F das transacoes anteriores
+
+-> Ao apagar é preciso atualizar o local de todos consoante quanto se apagou!
+
