@@ -1,3 +1,4 @@
+import com.google.common.primitives.Bytes;
 import io.atomix.cluster.messaging.ManagedMessagingService;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
 import io.atomix.storage.journal.SegmentedJournal;
@@ -6,6 +7,8 @@ import io.atomix.storage.journal.SegmentedJournalWriter;
 import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
 
+import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -23,9 +26,9 @@ class Msg {
 
 //mensagem para ser enviado do coordenador ao participante para o commit
 class MsgCommit extends Msg {
-    HashMap<Long,Byte[]> valores;
+    HashMap<Long,byte[]> valores;
 
-    public MsgCommit(int id, HashMap<Long, Byte[]> valores) {
+    public MsgCommit(int id, HashMap<Long, byte[]> valores) {
         super(id);
         this.valores = valores;
     }
@@ -35,10 +38,10 @@ class MsgCommit extends Msg {
 class LogEntry {
     public int xid;
     public String data;
-    public HashMap<Long,Byte[]> valores;
+    public HashMap<Long,byte[]> valores;
 
     public LogEntry() {}
-    public LogEntry(int xid, String data, HashMap<Long, Byte[]> valores) {
+    public LogEntry(int xid, String data, HashMap<Long, byte[]> valores) {
         this.xid=xid;
         this.data=data;
         this.valores = valores;
@@ -53,11 +56,18 @@ class Transaction{
     public int xid;
     public String resultado; //pode ser I; A ou C; F para o controlador
                             //pode ser P ou A; A ou C para o participante
+
+    //Estas variaveis são para o Coodenador ... Criar uma class com extends?
     public HashSet<Address> quaisResponderam = new HashSet<>();
-    public HashMap<Address, HashMap<Long, Byte[]>> participantes;
+    public HashMap<Address, HashMap<Long, byte[]>> participantes;
     //so podemos fazer commit quando o tamanho dos dois maps forem iguais!
 
-    public Transaction(int xid, String resultado, HashMap<Address, HashMap<Long, Byte[]>> participantes) {
+    public Transaction(int xid, String resultado){
+        this.xid = xid;
+        this.resultado = resultado;
+    }
+
+    public Transaction(int xid, String resultado, HashMap<Address, HashMap<Long, byte[]>> participantes) {
         this.xid = xid;
         this.resultado = resultado;
         this.participantes = participantes;
@@ -66,25 +76,34 @@ class Transaction{
 
 class TwoPCParticipante{
 
-    private HashMap<Integer, ArrayList<LogEntry>> transacoes = new HashMap<>();
+    //private HashMap<Integer, ArrayList<LogEntry>> transacoesANTIGA = new HashMap<>();
     private SegmentedJournal<Object> log;
     private SegmentedJournalReader<Object> readerLog;
     private SegmentedJournalWriter<Object> writerLog;
-    private HashMap<Integer, String> resultadoTransacoes = new HashMap<>();
-    private HashMap<Integer, String> minhasRespostas = new HashMap<>();
+
+    private HashMap<Integer, Transaction> transacoes = new HashMap<>();
+
+    /**
+     * @valores Para guadar os pares chave-valor
+     */
+    private HashMap<Long, byte[]> valores = new HashMap<>();
 
     private Address[] end;
     private int meuID;
     private ManagedMessagingService ms;
     private Serializer s;
-    //private Consumer<Msg> handlerMensagem;
 
+
+    /**
+     * ATENCAO!!!
+     * Para nao dar confusao, eu mudei o nome de transacoes para transacoesANTIGA na variavel! Esta a cima em comentarios
+     */
     private void analisaTransacaoParticipante(){
         System.out.println("AnalisaPart");
         //as transacoes que estao completas (com C ou A) têm 2 entradas na lista
         //as que não foram tratadas apenas têm uma
         ArrayList<LogEntry> naoTratadas = new ArrayList<>();
-        for(ArrayList<LogEntry> ent : transacoes.values()){
+        for(ArrayList<LogEntry> ent : transacoesANTIGA.values()){
 
             if(ent != null){
                 if(ent.size() < 2){
@@ -145,12 +164,12 @@ class TwoPCParticipante{
         while(readerLog.hasNext()) {
             LogEntry e = (LogEntry) readerLog.next().entry();
             System.out.println(e.toString());
-            ArrayList<LogEntry> aux = transacoes.get(e.xid); //a lista no maximo tem uma entrada para o participante
+            ArrayList<LogEntry> aux = transacoesANTIGA.get(e.xid); //a lista no maximo tem uma entrada para o participante
             if(aux == null){
                 aux = new ArrayList<LogEntry>();
             }
             aux.add(e);
-            transacoes.put(e.xid,aux);
+            transacoesANTIGA.put(e.xid,aux);
         }
 
         analisaTransacaoParticipante();
@@ -196,43 +215,53 @@ class TwoPCParticipante{
             recuperaLogParticipante();
         }
 
-        System.out.println("Passei recupera log!");
 
-        System.out.println("Vou registar handlers!");
         ms.registerHandler("prepared", (a,m)-> {
             Msg nova = s.decode(m);
-            String minhaResposta = minhasRespostas.get(nova.id);
-            if(minhaResposta != null){
-                //já tenho resposta a esta transacao, dou a mm
+
+            /**
+             * Vou verificar primeiro se já recebi uma resposta para este notificação, se sim tenho de dar a mesma
+             */
+            if(transacoes.containsKey(nova.id)){
                 Msg paraMandar = new Msg(nova.id);
-                ms.sendAsync(end[0], minhaResposta, s.encode(paraMandar));
+
+                //Para já vou deixar end[0], mas depois o coordenador poderá ser outro ...
+                String resultado = transacoes.get(nova.id).resultado;
+                switch (resultado){
+                    case "P": ms.sendAsync(end[0], "prepared", s.encode(paraMandar)); break;
+                    case "A": ms.sendAsync(end[0], "abort", s.encode(paraMandar)); break;
+                }
                 return;
             }
 
-            //caso não tenha resposta pergunto ao user
-            System.out.println("Quer participar na transação: " + nova.id + "? (0 para não)");
-            int res = 1;
-            String assunto = "prepared";
 
-            Scanner sc = new Scanner(System.in);
-            try{
-                String resAux = sc.next();
-                res = Integer.parseInt(resAux);
-            }
-            catch(Exception excep){}
+            String assunto = "prepared";
+            int res = 1;
 
             if(res == 0){
                 assunto = "abort";
-                writerLog.append(new LogEntry(nova.id,"A"));
-                resultadoTransacoes.put(nova.id,"A");
+                /**
+                 * Vou guardar os valores no Log, caso haja um abort!
+                 */
+                writerLog.append(new LogEntry(nova.id,"A", null));
+                Transaction t = new Transaction(nova.id, "A");
+                transacoes.put(nova.id, t);
             }
             else{
-                writerLog.append(new LogEntry(nova.id,"P"));
+                /**
+                 * Vou guardar a minha decisão no Log "P" <- Estou pronto para iniciar
+                 * Vou criar uma nova entrada na transacao
+                 */
+                writerLog.append(new LogEntry(nova.id,"P", null));
+                Transaction t = new Transaction(nova.id, "P");
+                transacoes.put(nova.id, t);
             }
-            minhasRespostas.put(nova.id,assunto); //guardo a minha resposta
 
-
-            //mandar mensagem ao controlador
+            /**
+             * Vou agora mandar a resposta para o coordenador
+             * ----> Não usei a mesma mensagem, porque posteriormente pode nos dar mais jeito para trabalhar com os varios coordenadores
+             * Mais uma vez tou a utilizar o end[0] que posteriormente poderá ser mudado
+             */
             Msg paraMandar = new Msg(nova.id);
             ms.sendAsync(end[0], assunto, s.encode(paraMandar));
 
@@ -241,28 +270,85 @@ class TwoPCParticipante{
         ms.registerHandler("abort", (a,m)-> {
             Msg nova = s.decode(m);
 
-            if(resultadoTransacoes.get(nova.id) != null){
-                System.out.println("asneira");
+            if(transacoes.containsKey(nova.id) == false){
+                System.out.println("Não foi possivel abortar a transacao ..." + nova.id);
             }
             else{
-                System.out.println("Abortar transacao: " + nova.id);
-                resultadoTransacoes.put(nova.id, "A");
-                writerLog.append(new LogEntry(nova.id, "A"));
+                /**
+                 * Para o abort se ja tiver um abort ignoramos, senão tenho de guardar o resultado
+                 */
+                if(transacoes.get(nova.id).resultado.equals("A")){
+                    System.out.println("Já recebi uma mensagem de abort para a transacao " + nova.id);
+                }else {
+                    System.out.println("Vou abortar a transacao " + nova.id);
+                    writerLog.append(new LogEntry(nova.id, "A", null));
+                    Transaction t = transacoes.get(nova.id);
+                    t.resultado = "F";
+                    transacoes.put(nova.id, t);
+                }
             }
+
+            Msg paraMandar = new Msg(nova.id);
+            ms.sendAsync(end[0], "ok", s.encode(paraMandar));
 
         }, es);
 
         ms.registerHandler("commit", (a,m)-> {
-            Msg nova = s.decode(m);
+            MsgCommit nova = s.decode(m);
 
-            if(resultadoTransacoes.get(nova.id) != null){
-                System.out.println("asneiraCCCCC");
+            if(transacoes.containsKey(nova.id) == false){
+                System.out.println("Não foi possivel efetuar commit da transacao ... " + nova.id);
             }
             else{
-                System.out.println("Realizar transacao: " + nova.id);
-                resultadoTransacoes.put(nova.id, "C");
-                writerLog.append(new LogEntry(nova.id, "C"));
+                /**
+                 * Primeiro verifico se já não guardei a
+                 */
+                if(transacoes.get(nova.id).resultado.equals("C")){
+                    System.out.println("Já tinha os valores referentes à transacao " + nova.id);
+                }else {
+                    /**
+                     * Tarefas:
+                     * --> Guardar o resultado no log
+                     * --> Guardar os valores
+                     * --> Adicionar a transacao no hashmap
+                     */
+                    System.out.println("Vou guardar os valores para a transacao " + nova.id);
+                    writerLog.append(new LogEntry(nova.id, "C", nova.valores));
+                    for(Map.Entry<Long, byte[]> entry: nova.valores.entrySet()){
+                        /**
+                         * Senão tiver a key, entao devo de adicionar tudo
+                         * Se ja tiver tenho de adicionar os novos valores de bytes ao array e ainda atualizar a transaction
+
+                         */
+                        Long key = entry.getKey();
+                        byte[] value = entry.getValue();
+                        if(valores.containsKey(key) == false){
+                            valores.put(key, value);
+                        }else{
+                            byte[] aux = valores.get(key);
+
+                            /**
+                             * Vou guardar num ByteArrayOutputStream só para guardar a junção dos dois bytes
+                             */
+                            ByteBuffer bb = ByteBuffer.allocate(value.length + aux.length);
+                            bb.put(aux);
+                            bb.put(value);
+                            valores.put(key, bb.array());
+
+                            /**
+                             * Guardar a resposta no transacoes
+                             */
+                            Transaction t = transacoes.get(nova.id);
+                            t.resultado = "C";
+                            transacoes.put(nova.id, t);
+                        }
+                    }
+                }
             }
+
+            Msg paraMandar = new Msg(nova.id);
+            ms.sendAsync(end[0], "ok", s.encode(paraMandar));
+
         }, es);
     }
 }
@@ -379,7 +465,7 @@ class TwoPCControlador{
             Transaction t = transacoes.get(e.xid);
             if(t == null) {
                 //caso não exista cria e adiciona ao mapa
-                HashMap<Address, HashMap<Long, Byte[]>> part = null;
+                HashMap<Address, HashMap<Long, byte[]>> part = null;
                 //System.out.println(e.toString());
                 if (e.valores != null) {
                     //se existirem valores (em caso de I ou C) entam vai buscar os participantes envolvidos e cada valor
@@ -618,11 +704,11 @@ class TwoPCControlador{
 
     }
 
-    public HashMap<Address,HashMap<Long,Byte[]>> participantesEnvolvidos(HashMap<Long, Byte[]> valores){
-        HashMap<Address,HashMap<Long,Byte[]>> participantes = new HashMap<>();
+    public HashMap<Address,HashMap<Long,byte[]>> participantesEnvolvidos(HashMap<Long, byte[]> valores){
+        HashMap<Address,HashMap<Long,byte[]>> participantes = new HashMap<>();
         for(Long aux : valores.keySet()){
             int resto = (int)(aux % (end.length-1)) + 1; //para já o coordenador n participa
-            HashMap<Long,Byte[]> auxiliar = participantes.get(end[resto]);
+            HashMap<Long,byte[]> auxiliar = participantes.get(end[resto]);
             if(auxiliar == null){
                 auxiliar = new HashMap<>();
             }
@@ -632,7 +718,7 @@ class TwoPCControlador{
         return participantes;
     }
 
-    public void iniciaTransacao(HashMap<Long,Byte[]> valores){
+    public void iniciaTransacao(HashMap<Long,byte[]> valores){
         //depois tem de perguntar sempre se quer realizar transação
         while(true){
             try {
@@ -642,7 +728,7 @@ class TwoPCControlador{
                 //mandar mensagem para todos para iniciar transacao
                 Msg paraMandar = new Msg(xid);
                 writerLog.append(new LogEntry(xid,"I",valores));
-                HashMap<Address,HashMap<Long,Byte[]>> participantes = participantesEnvolvidos(valores);
+                HashMap<Address,HashMap<Long,byte[]>> participantes = participantesEnvolvidos(valores);
                 Transaction novaTransacao = new Transaction(xid, "I", participantes);
 
                 for(Address a: participantes.keySet()){
