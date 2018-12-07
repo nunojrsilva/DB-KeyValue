@@ -1,0 +1,33 @@
+O que está feito do cliente
+
+Recebe mensagem "prepared":
+
+Vai verificar se já tem uma transacao iniciada:
+    Se tiver, envia a resposta que tem;
+    Senão tem de enviar uma resposta nova:
+        -> Caso queira abortar, então vai mandar uma mensagem com assunto "abort" e antes guarda no log e hashmap (criando uma nova entrada )a sua decisao("A") 
+        -> Caso esteja pronto para iniciar, o procedimento é parecido com o de cima mas o assunto é "prepared" e a decisão("P")
+
+Recebe mensagem "abort":
+
+Primeiro verifica se a entrada para a transacao não é nula, se for algo de errado não esta certo
+
+Verifica então se já tem uma resposta "A":
+    -> Se tiver então não faz nada
+    -> Senao tiver, vai guardar no log e no hashmap a respetiva decisao ("A") 
+
+Em qualquer caso envia um "ok" para o controlador ... Caso dê asneiras no prmeiro ponto, então temos de verificar que o codigo esta mal
+
+Recebe mensagem "commit":
+
+Primeiro verifica se a entrada para a transacao não é nula, se for algo de errado não esta certo
+
+Verifica então se já tem uma resposta "C":
+    -> Se tiver então não faz nada
+    -> Senao tiver, vai guardar no log e no hashmap a respetiva decisao ("C") e ainda é Necessário ver ainda se nos valores já existe a key:
+        --> Caso exista então tem de adicionar ao byte[] existente os novos bytes
+        --> Caso não exista cria uma entrada
+
+Em qualquer caso envia um "ok" para o controlador ... Caso dê asneiras no prmeiro ponto, então temos de verificar que o codigo esta mal
+
+NOTA MUITO IMPORTANTE: No log, sempre que insiro um "C" guardo o hashmap com os valores (ajudará na recuperação)
