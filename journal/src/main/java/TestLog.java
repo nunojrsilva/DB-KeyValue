@@ -1,4 +1,5 @@
 import com.google.common.primitives.Bytes;
+import com.sun.org.apache.xpath.internal.operations.Bool;
 import io.atomix.cluster.messaging.ManagedMessagingService;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
 import io.atomix.storage.journal.SegmentedJournal;
@@ -11,10 +12,7 @@ import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 //mensagem para ser enviada!
 class Msg {
@@ -77,6 +75,7 @@ class Transaction{
     public HashSet<Address> quaisResponderam = new HashSet<>();
     public HashMap<Address, HashMap<Long, byte[]>> participantes;
     //so podemos fazer commit quando o tamanho dos dois maps forem iguais!
+    public CompletableFuture<Boolean> terminada;
 
     public Transaction(int xid, String resultado){
         this.xid = xid;
@@ -717,48 +716,44 @@ class TwoPCControlador{
 
     public void iniciaTransacao(HashMap<Long,byte[]> valores){
         //depois tem de perguntar sempre se quer realizar transação
-        while(true){
-            try {
-                xid++;
-                System.out.println("Carregue enter para realizar a transação " + xid);
-                int read = System.in.read();
-                //mandar mensagem para todos para iniciar transacao
-                Msg paraMandar = new Msg(xid);
-                writerLog.append(new LogEntry(xid,"I",valores));
-                HashMap<Address,HashMap<Long,byte[]>> participantes = participantesEnvolvidos(valores);
-                Transaction novaTransacao = new Transaction(xid, "I", participantes);
-                transacoes.put(xid,novaTransacao);
+            xid++;
+            //mandar mensagem para todos para iniciar transacao
+            Msg paraMandar = new Msg(xid);
+            writerLog.append(new LogEntry(xid,"I",valores));
+            HashMap<Address,HashMap<Long,byte[]>> participantes = participantesEnvolvidos(valores);
+            Transaction novaTransacao = new Transaction(xid, "I", participantes);
+            novaTransacao.terminada = new CompletableFuture<Boolean>();
+            transacoes.put(xid,novaTransacao);
 
-                for(Address a: participantes.keySet()){
-                    System.out.println("Vou mandar a: " + a);
-                    ms.sendAsync(a, "prepared", s.encode(paraMandar));
+            for(Address a: participantes.keySet()){
+                System.out.println("Vou mandar a: " + a);
+                ms.sendAsync(a, "prepared", s.encode(paraMandar));
+            }
+
+            paraCancelar.add(paraMandar.id); //adicionar este id ao array para cancelar a transacao com o id
+            possoCancelar.add(true); //para já podemos cancelar (até que alguem ponha resposta)
+
+            es.schedule( ()-> {
+                int idT = paraCancelar.remove(0);
+                boolean cancelo = possoCancelar.remove(0);
+
+                if(cancelo) {
+                    writerLog.append(new LogEntry(idT,"A",null));
+                    transacoes.get(idT).resultado = "A";
+                    paraTerminar.add(idT);
+                    possoTerminar.add(false);
+                    System.out.println("Res: " + transacoes.get(idT).resultado);
+                    Msg paraMandarAux = new Msg(idT);
+                    for(Address a : transacoes.get(idT).participantes.keySet())
+                        ms.sendAsync(a, "abort", s.encode(paraMandarAux));
+
+
+                    es.schedule(() -> {
+                        cicloTerminar();
+                    }, DELTA, TimeUnit.SECONDS);
                 }
+            }, DELTA, TimeUnit.SECONDS);
 
-                paraCancelar.add(paraMandar.id); //adicionar este id ao array para cancelar a transacao com o id
-                possoCancelar.add(true); //para já podemos cancelar (até que alguem ponha resposta)
-
-                es.schedule( ()-> {
-                    int idT = paraCancelar.remove(0);
-                    boolean cancelo = possoCancelar.remove(0);
-
-                    if(cancelo) {
-                        writerLog.append(new LogEntry(idT,"A",null));
-                        transacoes.get(idT).resultado = "A";
-                        paraTerminar.add(idT);
-                        possoTerminar.add(false);
-                        System.out.println("Res: " + transacoes.get(idT).resultado);
-                        Msg paraMandarAux = new Msg(idT);
-                        for(Address a : transacoes.get(idT).participantes.keySet())
-                            ms.sendAsync(a, "abort", s.encode(paraMandarAux));
-
-
-                        es.schedule(() -> {
-                            cicloTerminar();
-                        }, DELTA, TimeUnit.SECONDS);
-                    }
-                }, DELTA, TimeUnit.SECONDS);
-
-            }catch(Exception excep){System.out.println(excep);}
         }
     }
 }
