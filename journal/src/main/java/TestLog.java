@@ -9,6 +9,7 @@ import io.atomix.utils.serializer.Serializer;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -47,8 +48,23 @@ class LogEntry {
         this.valores = valores;
     }
 
+    @Override
     public String toString() {
-        return "xid="+xid+" "+data;
+        String mapa = null;
+        if(valores != null){
+            mapa = "{";
+
+            for(Map.Entry<Long,byte[]> aux: valores.entrySet()){
+
+                mapa += aux.getKey() + "=" + new String(aux.getValue(), StandardCharsets.UTF_8) + ",";
+            }
+            mapa += "}";
+        }
+        return "LogEntry{" +
+                "xid=" + xid +
+                ", data='" + data + '\'' +
+                ", valores=" + mapa +
+                '}';
     }
 }
 
@@ -98,7 +114,8 @@ class TwoPCParticipante{
      * ATENCAO!!!
      * Para nao dar confusao, eu mudei o nome de transacoes para transacoesANTIGA na variavel! Esta a cima em comentarios
      */
-    private void analisaTransacaoParticipante(){
+
+    /*private void analisaTransacaoParticipante(){
         System.out.println("AnalisaPart");
         //as transacoes que estao completas (com C ou A) têm 2 entradas na lista
         //as que não foram tratadas apenas têm uma
@@ -157,9 +174,9 @@ class TwoPCParticipante{
 
 
         }
-    }
+    }*/
 
-    public void recuperaLogParticipante(){
+    /*public void recuperaLogParticipante(){
         System.out.println("Recupera Part");
         while(readerLog.hasNext()) {
             LogEntry e = (LogEntry) readerLog.next().entry();
@@ -174,13 +191,14 @@ class TwoPCParticipante{
 
         analisaTransacaoParticipante();
 
-    }
+    }*/
 
     public TwoPCParticipante(Address[] e, int id){
 
         s = Serializer.builder()
                 .withTypes(Msg.class)
                 .withTypes(LogEntry.class)
+                .withTypes(MsgCommit.class)
                 .build();
 
         log = SegmentedJournal.builder()
@@ -212,7 +230,7 @@ class TwoPCParticipante{
             return;
         }
         else{
-            recuperaLogParticipante();
+            //recuperaLogParticipante();
         }
 
 
@@ -322,27 +340,12 @@ class TwoPCParticipante{
                          */
                         Long key = entry.getKey();
                         byte[] value = entry.getValue();
-                        if(valores.containsKey(key) == false){
-                            valores.put(key, value);
-                        }else{
-                            byte[] aux = valores.get(key);
-
-                            /**
-                             * Vou guardar num ByteArrayOutputStream só para guardar a junção dos dois bytes
-                             */
-                            ByteBuffer bb = ByteBuffer.allocate(value.length + aux.length);
-                            bb.put(aux);
-                            bb.put(value);
-                            valores.put(key, bb.array());
-
-                            /**
-                             * Guardar a resposta no transacoes
-                             */
-                            Transaction t = transacoes.get(nova.id);
-                            t.resultado = "C";
-                            transacoes.put(nova.id, t);
-                        }
+                        valores.put(key, value);
                     }
+
+                    Transaction t = transacoes.get(nova.id);
+                    t.resultado = "C";
+                    transacoes.put(nova.id, t);
                 }
             }
 
@@ -573,7 +576,7 @@ class TwoPCControlador{
                 Msg nova = s.decode(m);
 
                 //pensar depois para o caso em que a transacao está terminada
-
+                System.out.println("Passei decode!");
                 if(!transacoes.get(nova.id).resultado.equals("I")){
                     //já existe resultado diferente de I e então pode-se mandar mensagem consoante esse resultado
 
@@ -592,12 +595,15 @@ class TwoPCControlador{
                 }
 
                 else{
+                    System.out.println("No else!");
                     //ainda não existe resultado
                     Transaction t = transacoes.get(nova.id);
                     t.quaisResponderam.add(o);
-
+                    System.out.println("Adicionei responderam");
 
                     if(t.quaisResponderam.size() == t.participantes.size()){
+                        System.out.println("Resultado depois: " + transacoes.get(nova.id).resultado);
+                        System.out.println("Já responderam todos!");
                         //já responderam todos e pode-se mandar fazer commit
                         writerLog.append(new LogEntry(nova.id, "C", t.participantes.values()
                                 .stream().reduce(new HashMap<>(), (r,n) -> { r.putAll(n); return r;})));
@@ -614,6 +620,8 @@ class TwoPCControlador{
                             MsgCommit msgC = new MsgCommit(nova.id, t.participantes.get(a));
                             ms.sendAsync(a, "commit", s.encode(msgC));
                         }
+
+                        System.out.println("Resultado depois: " + transacoes.get(nova.id).resultado);
 
                         es.schedule( ()-> {
                             cicloTerminar();
@@ -730,6 +738,7 @@ class TwoPCControlador{
                 writerLog.append(new LogEntry(xid,"I",valores));
                 HashMap<Address,HashMap<Long,byte[]>> participantes = participantesEnvolvidos(valores);
                 Transaction novaTransacao = new Transaction(xid, "I", participantes);
+                transacoes.put(xid,novaTransacao);
 
                 for(Address a: participantes.keySet()){
                     System.out.println("Vou mandar a: " + a);
@@ -766,6 +775,31 @@ class TwoPCControlador{
 }
 
 public class TestLog {
+    public static void leLog(SegmentedJournal<Object> log){
+        SegmentedJournalReader<Object> readLog = log.openReader(0);
+        while(readLog.hasNext()){
+            LogEntry e = (LogEntry) readLog.next().entry();
+            System.out.println(e);
+        }
+    }
+
+    public static void leLogs(Address e[]){
+        Serializer ser = Serializer.builder()
+                .withTypes(Msg.class)
+                .withTypes(LogEntry.class)
+                .withTypes(MsgCommit.class)
+                .build();
+
+
+        for(int i = 0; i < e.length; i++){
+            SegmentedJournal<Object> log = SegmentedJournal.builder()
+                    .withName("exemploID" + i)
+                    .withSerializer(ser)
+                    .build();
+            System.out.println("-------------------------------ID:"+i+"-----------------------------");
+            leLog(log);
+        }
+    }
     public static void main(String[] args) {
 
         Address[] end = {
@@ -777,11 +811,20 @@ public class TestLog {
         };
 
         int id = Integer.parseInt(args[0]);
-        if(id == 0){
-            TwoPCControlador tpc = new TwoPCControlador(end,id);
+        if(id==-1){
+            leLogs(end);
         }
-        else{
-            TwoPCParticipante tpp = new TwoPCParticipante(end, id);
+        else {
+            if (id == 0) {
+                TwoPCControlador tpc = new TwoPCControlador(end, id);
+                HashMap<Long, byte[]> valores = new HashMap<>();
+                valores.put(Long.valueOf(1), "ola".getBytes());
+                valores.put(Long.valueOf(2), "cenas".getBytes());
+                valores.put(Long.valueOf(3), "muitascoisas".getBytes());
+                tpc.iniciaTransacao(valores);
+            } else {
+                TwoPCParticipante tpp = new TwoPCParticipante(end, id);
+            }
         }
 
     }

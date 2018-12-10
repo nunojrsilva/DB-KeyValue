@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="BookmarkManager">
+    <bookmark url="file://$PROJECT_DIR$/src/main/java/TestLog.java" line="201" mnemonic="2" />
+  </component>
   <component name="ChangeListManager">
     <list default="true" id="b6fc7d0d-a8b4-4ccf-b9bc-363136bdbed9" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/exemploID0-1.log" beforeDir="false" afterPath="$PROJECT_DIR$/exemploID0-1.log" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/exemploID1-1.log" beforeDir="false" afterPath="$PROJECT_DIR$/exemploID1-1.log" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/exemploID2-1.log" beforeDir="false" afterPath="$PROJECT_DIR$/exemploID2-1.log" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/TestLog.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/TestLog.java" afterDir="false" />
     </list>
     <ignored path="$PROJECT_DIR$/target/" />
@@ -18,14 +23,12 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/src/main/java/TestLog.java">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-1721">
-              <caret line="332" column="48" selection-start-line="332" selection-start-column="44" selection-end-line="332" selection-end-column="48" />
+            <state relative-caret-position="175">
+              <caret line="604" column="101" selection-start-line="604" selection-start-column="101" selection-end-line="604" selection-end-column="101" />
               <folding>
                 <element signature="imports" expanded="true" />
-                <element signature="method#analisaTransacaoParticipante#0;class#TwoPCParticipante#0" />
-                <element signature="method#recuperaLogParticipante#0;class#TwoPCParticipante#0" />
+                <element signature="e#23155#24865#0" />
                 <element signature="method#cicloTerminar#0;class#TwoPCControlador#0" />
-                <element signature="class#TestLog#0" />
               </folding>
             </state>
           </provider>
@@ -84,7 +87,7 @@
     <panes />
   </component>
   <component name="PropertiesComponent">
-    <property name="com.android.tools.idea.instantapp.provision.ProvisionBeforeRunTaskProvider.myTimeStamp" value="1544093296059" />
+    <property name="com.android.tools.idea.instantapp.provision.ProvisionBeforeRunTaskProvider.myTimeStamp" value="1544440671303" />
     <property name="last_opened_file_path" value="$PROJECT_DIR$" />
     <property name="project.structure.last.edited" value="Modules" />
     <property name="project.structure.proportion" value="0.0" />
@@ -102,7 +105,15 @@
       </list>
     </option>
   </component>
-  <component name="RunManager" selected="Application.TestLog2">
+  <component name="RunManager" selected="Application.LeLogs">
+    <configuration name="LeLogs" type="Application" factoryName="Application">
+      <option name="MAIN_CLASS_NAME" value="TestLog" />
+      <module name="journal" />
+      <option name="PROGRAM_PARAMETERS" value="-1" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="TestLog0" type="Application" factoryName="Application">
       <option name="MAIN_CLASS_NAME" value="TestLog" />
       <module name="journal" />
@@ -131,6 +142,7 @@
       <item itemvalue="Application.TestLog0" />
       <item itemvalue="Application.TestLog1" />
       <item itemvalue="Application.TestLog2" />
+      <item itemvalue="Application.LeLogs" />
     </list>
   </component>
   <component name="SvnConfiguration">
@@ -156,8 +168,7 @@
     </todo-panel>
   </component>
   <component name="ToolWindowManager">
-    <frame x="48" y="-11" width="1873" height="1092" extended-state="6" />
-    <editor active="true" />
+    <frame x="67" y="25" width="1299" height="743" extended-state="6" />
     <layout>
       <window_info content_ui="combo" id="Project" order="0" weight="0.26177174" />
       <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
@@ -168,15 +179,15 @@
       <window_info id="Favorites" order="6" side_tool="true" />
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Find" order="1" />
-      <window_info anchor="bottom" id="Run" order="2" weight="0.32954547" />
-      <window_info anchor="bottom" id="Debug" order="3" weight="0.39935064" />
+      <window_info anchor="bottom" id="Run" order="2" weight="0.5521173" />
+      <window_info anchor="bottom" id="Debug" order="3" weight="0.39739415" />
       <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
       <window_info anchor="bottom" id="TODO" order="6" weight="0.32954547" />
       <window_info anchor="bottom" id="Terminal" order="7" />
       <window_info anchor="bottom" id="Event Log" order="8" side_tool="true" />
       <window_info anchor="bottom" id="Version Control" order="9" />
-      <window_info anchor="bottom" id="Messages" order="10" weight="0.32954547" />
+      <window_info anchor="bottom" id="Messages" order="10" weight="0.32899022" />
       <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
       <window_info anchor="right" id="Maven" order="1" weight="0.329863" />
       <window_info anchor="right" id="Ant Build" order="2" weight="0.25" />
@@ -220,14 +231,12 @@
   <component name="editorHistoryManager">
     <entry file="file://$PROJECT_DIR$/src/main/java/TestLog.java">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-1721">
-          <caret line="332" column="48" selection-start-line="332" selection-start-column="44" selection-end-line="332" selection-end-column="48" />
+        <state relative-caret-position="175">
+          <caret line="604" column="101" selection-start-line="604" selection-start-column="101" selection-end-line="604" selection-end-column="101" />
           <folding>
             <element signature="imports" expanded="true" />
-            <element signature="method#analisaTransacaoParticipante#0;class#TwoPCParticipante#0" />
-            <element signature="method#recuperaLogParticipante#0;class#TwoPCParticipante#0" />
+            <element signature="e#23155#24865#0" />
             <element signature="method#cicloTerminar#0;class#TwoPCControlador#0" />
-            <element signature="class#TestLog#0" />
           </folding>
         </state>
       </provider>
