@@ -8,6 +8,12 @@
 .idea/**/dictionaries
 .idea/**/shelf
 
+
+journal/.idea/misc.xml
+journal/.idea/workspace.xml
+journal/.idea/vcs.xml
+
+
 # Generated files
 .idea/**/contentModel.xml
 

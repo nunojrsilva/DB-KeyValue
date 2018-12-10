@@ -90,7 +90,7 @@ class Transaction{
     }
 }
 
-class TwoPCParticipante{
+class TwoPCParticipante {
 
     //private HashMap<Integer, ArrayList<LogEntry>> transacoesANTIGA = new HashMap<>();
     private SegmentedJournal<Object> log;
@@ -114,84 +114,73 @@ class TwoPCParticipante{
      * ATENCAO!!!
      * Para nao dar confusao, eu mudei o nome de transacoes para transacoesANTIGA na variavel! Esta a cima em comentarios
      */
+    private void analisaTransacaoParticipante() {
 
-    /*private void analisaTransacaoParticipante(){
-        System.out.println("AnalisaPart");
-        //as transacoes que estao completas (com C ou A) têm 2 entradas na lista
-        //as que não foram tratadas apenas têm uma
-        ArrayList<LogEntry> naoTratadas = new ArrayList<>();
-        for(ArrayList<LogEntry> ent : transacoesANTIGA.values()){
+        //Resultados possiveis :
+        for (Transaction t : transacoes.values()) {
+            Msg paraMandar = new Msg(t.xid);
+            switch (t.resultado) {
+                case ("P"):
+                    ms.sendAsync(end[0], "prepared", s.encode(paraMandar));
+                    break;
+                case ("A"):
+                    ms.sendAsync(end[0], "abort", s.encode(paraMandar));
+                    break;
 
-            if(ent != null){
-                if(ent.size() < 2){
-                    System.out.println("Entrada com menos de 2");
-                    LogEntry entrada = ent.get(0);
-                    if(entrada != null && !entrada.data.equals("A")){ //se a entrada não é A, então é P e
-                        // a transação ainda não foi tratada
-                        minhasRespostas.put(entrada.xid,"prepared");
-                        System.out.println("Entrada nao tratada");
-                        naoTratadas.add(entrada);
-                    }
-                    else{
-                        if(entrada != null){
-                            minhasRespostas.put(entrada.xid,"abort");
-                            resultadoTransacoes.put(entrada.xid,entrada.data);
-                            Msg paraMandar = new Msg(entrada.xid);
-                            try{
+                case ("C"):
+                    ms.sendAsync(end[0], "commit", s.encode(paraMandar));
+                    break;
 
-                                ms.sendAsync(end[0], "abort", s.encode(paraMandar));
-                            }catch(Exception excep){
-                                System.out.println(excep);
-                            }
-                        }
-                    }
-                }
-                else{
-                    LogEntry resultadoAux = ent.get(1);
-                    resultadoTransacoes.put(resultadoAux.xid,resultadoAux.data);
-                    minhasRespostas.put(resultadoAux.xid,(resultadoAux.data.equals("A") ? "abort" : "prepared"));
-                }
-            }
-        }
 
-        System.out.println("----------Resultado das transacoes---------");
-        for(Map.Entry<Integer,String> resAux: resultadoTransacoes.entrySet()){
-            System.out.println("XID: " + resAux.getKey() + "!Res: " + resAux.getValue() + "!");
-        }
-
-        System.out.println("------------Transações não tratadas--------");
-        for(LogEntry entrada: naoTratadas){
-            //mandar mensagem a perguntar se estão preparados
-            System.out.println("XID: " + entrada.xid);
-
-            Msg paraMandar = new Msg(entrada.xid);
-            try{
-
-                ms.sendAsync(end[0], "prepared", s.encode(paraMandar));
-            }catch(Exception excep){
-                System.out.println(excep);
             }
 
-
         }
-    }*/
 
-    /*public void recuperaLogParticipante(){
+    }
+
+
+    public void recuperaLogParticipante(){
         System.out.println("Recupera Part");
+
         while(readerLog.hasNext()) {
+
+            // Leitura do log
             LogEntry e = (LogEntry) readerLog.next().entry();
+
             System.out.println(e.toString());
-            ArrayList<LogEntry> aux = transacoesANTIGA.get(e.xid); //a lista no maximo tem uma entrada para o participante
-            if(aux == null){
-                aux = new ArrayList<LogEntry>();
+
+            Transaction t = transacoes.get(e.xid);
+
+            if (t == null) {
+
+                if (e.valores != null)
+                    valores = e.valores;
+
+
+                t = new Transaction(e.xid, e.data);
+                transacoes.put(e.xid, t);
+
+
+
             }
-            aux.add(e);
-            transacoesANTIGA.put(e.xid,aux);
+
+            else {
+                //Altera o resultado
+                t.resultado = e.data;
+                if (e.valores != null)
+                    valores = e.valores;
+
+            }
+
         }
 
         analisaTransacaoParticipante();
 
-    }*/
+    }
+
+
+
+
 
     public TwoPCParticipante(Address[] e, int id){
 
