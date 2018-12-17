@@ -1,75 +1,28 @@
 import io.atomix.utils.net.Address;
 import io.atomix.cluster.messaging.ManagedMessagingService;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
+import io.atomix.utils.serializer.Serializer;
+
 import java.time.Duration;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
-interface Pedido{
-    Address getCoordenador();
-    boolean finalizado();
-    void finaliza(Object o);
-}
-
-class PedidoGet implements Pedido{
-    public Collection<Long> keys;
-    public Address coordenador;
-    public boolean finalizado;
-    public HashMap<Long,byte[]> resultado;
-
-    public Address getCoordenador(){
-        return coordenador;
-    }
-    public boolean finalizado(){
-        return finalizado;
-    }
-    public void finaliza(Object res){
-        finalizado = true;
-        resultado = (HashMap<Long,byte[]>)res;
-    }
-
-}
-
-class PedidoPut implements Pedido{
-    public Address coordenador;
-    public boolean finalizado = false;
-    public Map<Long,byte[]> valores;
-    public boolean resultado;
-    public CompletableFuture<Boolean> cf;
-
-    public PedidoPut(Address coordenador, Map<Long, byte[]> valores, CompletableFuture<Boolean> cf) {
-        this.coordenador = coordenador;
-        this.valores = valores;
-        this.cf = cf;
-    }
-
-    public Address getCoordenador(){
-        return coordenador;
-    }
-    public boolean finalizado(){
-        return finalizado;
-    }
-    public void finaliza(Object res){
-        finalizado = true;
-        resultado = (boolean)res;
-    }
-
-}
 
 public class ClienteStub {
 
-   private Address[] coordenadores = {Address.from("localhost:23451")};
-   private int atual= 0;
+   private String[] coordenadores = {"localhost:23451"};
+   private int coordAtual= 0;
+   private int pedidoAtual = 0;
    private ManagedMessagingService ms;
-   private Serializer s;
-   private ScheduledExecutorService es;
-   private ArrayList<Pedido> pedidos = new ArrayList<Pedido>();
+   private Serializer s = DBKeyValueProtocol.newSerializer();
+   private ScheduledExecutorService es = Executors.newSingleThreadScheduledExecutor();
+   private ArrayList<Integer> pedidos = new ArrayList<Integer>();
+   private HashMap<Integer,Pedido> mapaPedidos = new HashMap<>();
+   private HashMap<Integer,CompletableFuture<Boolean>> resultadoPedidos = new HashMap<>();
 
    public ClienteStub(ManagedMessagingService ms){
         this.ms = ms;
@@ -77,22 +30,31 @@ public class ClienteStub {
    }
 
    public void verificaPedido(){
-       Pedido p = pedidos.remove(0);
+       int idP = pedidos.remove(0);
+       Pedido p = mapaPedidos.get(idP);
 
        if(p instanceof PedidoPut){
            PedidoPut pp = (PedidoPut) p;
            if(pp.finalizado){
-                pp.cf.complete(pp.resultado);
+                resultadoPedidos.get(pp.id).complete(pp.resultado);
            }
            else{
                //voltar a mandar
-               pedidos.add(pp);
+               pedidos.add(pp.id);
+               /*ms.sendAndReceive(Address.from(pp.coordenador),"put", s.encode(pp), Duration.ofSeconds(20),es)
+                   .thenAccept((aux) -> {
+                       PedidoPut rpp = s.decode(aux);
+                       pp.finalizado = true;
+                       mapaPedidos.put(rpp.id,rpp);
+               });
+               */
 
                es.schedule(() -> {
                    verificaPedido();
                },20, TimeUnit.SECONDS);
            }
        }
+
        else{
            if(p instanceof PedidoGet){
 
@@ -103,26 +65,42 @@ public class ClienteStub {
     public CompletableFuture<Boolean> put(Map<Long,byte[]> values){
         //
         CompletableFuture<Boolean> res = new CompletableFuture<Boolean>();
-        PedidoPut pp = new PedidoPut(coordenadores[atual],values,res);
-        pedidos.add(pp);
+        PedidoPut pp = new PedidoPut(coordenadores[coordAtual],values,pedidoAtual++);
+        pedidos.add(pp.id);
+        mapaPedidos.put(pp.id,pp);
+        resultadoPedidos.put(pp.id,res);
 
-        ms.sendAndReceive(coordenadores[atual],"put", s.encode(values), Duration.ofSeconds(20))
-                .thenApply(aux -> {
-                    boolean resposta = s.decode(aux);
-                    return res.completedFuture(resposta);
-                }, es);
+        try {
+            ms.sendAsync(Address.from(coordenadores[coordAtual]),"put", s.encode(pp)).get();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
+        ms.registerHandler("put", (a,m)->{
+            System.out.println("Está completo!");
+            PedidoPut rpp = s.decode(m);
+            rpp.finalizado = true;
+            mapaPedidos.put(rpp.id,rpp);
+        },es);
+          /*  .thenAccept(aux -> {
+                System.out.println("Está completo!");
+                PedidoPut rpp = s.decode(aux);
+                rpp.finalizado = true;
+                mapaPedidos.put(rpp.id,rpp);
+
+        });*/
 
         es.schedule(() -> {
             verificaPedido();
         },20, TimeUnit.SECONDS);
 
         return res;
-
-
     }
 
     public CompletableFuture<Map<Long,byte[]>> get(Collection<Long> keys){
        //depois implementamos estes!
+        return CompletableFuture.completedFuture(null);
     }
 
 }
