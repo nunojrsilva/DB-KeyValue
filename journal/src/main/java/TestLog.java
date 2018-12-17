@@ -1,5 +1,3 @@
-import com.google.common.primitives.Bytes;
-import com.sun.org.apache.xpath.internal.operations.Bool;
 import io.atomix.cluster.messaging.ManagedMessagingService;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
 import io.atomix.storage.journal.SegmentedJournal;
@@ -324,7 +322,6 @@ class TwoPCParticipante {
                         /**
                          * Senão tiver a key, entao devo de adicionar tudo
                          * Se ja tiver tenho de adicionar os novos valores de bytes ao array e ainda atualizar a transaction
-
                          */
                         Long key = entry.getKey();
                         byte[] value = entry.getValue();
@@ -343,7 +340,6 @@ class TwoPCParticipante {
         }, es);
     }
 }
-
 
 class TwoPCControlador{
 
@@ -371,6 +367,91 @@ class TwoPCControlador{
     private ScheduledExecutorService es;
     //private Consumer<Msg> handlerMensagem;
 
+    private CompletableFuture<Void> enviaCommit(MsgCommit mc, List<Address> part, Transaction t){
+
+        if( part.size() == 0 ) {
+            return CompletableFuture.completedFuture(null);
+        }
+        else {
+            Address ad = part.remove(0);
+            mc.valores = t.participantes.get(ad);
+            return ms.sendAsync(ad, "commit", s.encode(mc))
+                    .thenCompose(aux -> {
+                        return enviaCommit(mc,part,t);
+                    });
+        }
+    }
+
+    private CompletableFuture<Void> enviaCommit(MsgCommit mc,Address ad) {
+
+        return ms.sendAsync(ad, "commit", s.encode(mc))
+            .thenCompose(aux -> {
+                    return CompletableFuture.completedFuture(null);
+        });
+    }
+
+    private CompletableFuture<Void> enviaPrepared(Msg m, List<Address> part){
+
+        if( part.size() == 0 ) {
+            return CompletableFuture.completedFuture(null);
+        }
+        else {
+            Address ad = part.remove(0);
+            return ms.sendAsync(ad, "prepared", s.encode(m))
+                    .thenCompose(aux -> {
+                        return enviaPrepared(m,part);
+                    });
+        }
+    }
+
+    private CompletableFuture<Void> enviaAbort(Msg m, List<Address> part){
+
+        if( part.size() == 0 ) {
+            return CompletableFuture.completedFuture(null);
+        }
+        else {
+            Address ad = part.remove(0);
+            return ms.sendAsync(ad, "abort", s.encode(m))
+                    .thenCompose(aux -> {
+                        return enviaPrepared(m,part);
+                    });
+        }
+    }
+
+    private CompletableFuture<Void> enviaAbort(Msg m,Address ad) {
+
+        return ms.sendAsync(ad, "abort", s.encode(m))
+            .thenCompose(aux -> {
+                    return CompletableFuture.completedFuture(null);
+        });
+    }
+
+    private void passouTempoTransacao(){
+        int idT = paraCancelar.remove(0);
+        boolean cancelo = possoCancelar.remove(0);
+
+        if(cancelo) {
+            writerLog.append(new LogEntry(idT,"A",null));
+            transacoes.get(idT).resultado = "A";
+            paraTerminar.add(idT);
+            possoTerminar.add(false);
+            System.out.println("Res: " + transacoes.get(idT).resultado);
+            Msg paraMandarAux = new Msg(idT);
+            try {
+                enviaAbort(paraMandarAux,new ArrayList<>(transacoes.get(idT).participantes.keySet())).get();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            }
+
+            es.schedule(() -> {
+                cicloTerminar();
+            }, DELTA, TimeUnit.SECONDS);
+        }
+
+    }
+
     private void analisaTransacaoControlador(){
 
         for(Transaction t: transacoes.values()){
@@ -379,28 +460,18 @@ class TwoPCControlador{
                 Msg paraMandar = new Msg(t.xid);
                 paraCancelar.add(t.xid);
                 possoCancelar.add(true);
-                for(Address a: t.participantes.keySet())
-                    ms.sendAsync(a, "prepared", s.encode(paraMandar));
+                try {
+                    enviaPrepared(paraMandar,new ArrayList<>(t.participantes.keySet())).get();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                } catch (ExecutionException e) {
+                    e.printStackTrace();
+                }
+
                 //dar tempo para a resposta
                 es.schedule( ()-> {
-                    int idT = paraCancelar.remove(0);
-                    boolean cancelo = possoCancelar.remove(0);
+                    passouTempoTransacao();
 
-                    if(cancelo) {
-                        writerLog.append(new LogEntry(idT,"A",null));
-                        transacoes.get(idT).resultado = "A";
-                        paraTerminar.add(idT);
-                        possoTerminar.add(false);
-                        System.out.println("Res: " + transacoes.get(idT).resultado);
-                        Msg paraMandarAux = new Msg(idT);
-                        for(Address a : transacoes.get(idT).participantes.keySet())
-                            ms.sendAsync(a, "abort", s.encode(paraMandarAux));
-
-
-                        es.schedule(() -> {
-                            cicloTerminar();
-                        }, DELTA, TimeUnit.SECONDS);
-                    }
                 }, DELTA, TimeUnit.SECONDS);
             }
             else{
@@ -412,11 +483,13 @@ class TwoPCControlador{
 
                     //mandar mensagem a todos a dizer commit
                     MsgCommit msgC = new MsgCommit(t.xid,null);
-                    for(Address a: t.participantes.keySet()) {
-                        msgC.valores = t.participantes.get(a);
-                        ms.sendAsync(a, "commit", s.encode(msgC));
+                    try {
+                        enviaCommit(msgC,new ArrayList<>(t.participantes.keySet()),t).get();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    } catch (ExecutionException e) {
+                        e.printStackTrace();
                     }
-
 
                     es.schedule( ()-> {
                         cicloTerminar();
@@ -429,9 +502,13 @@ class TwoPCControlador{
                         Msg paraMandar = new Msg(t.xid);
                         paraTerminar.add(t.xid);
                         possoTerminar.add(false);
-                        for(Address a: t.participantes.keySet())
-                            ms.sendAsync(a, "abort", s.encode(paraMandar));
-
+                        try {
+                            enviaAbort(paraMandar,new ArrayList<>(t.participantes.keySet())).get();
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        } catch (ExecutionException e) {
+                            e.printStackTrace();
+                        }
 
                         es.schedule( ()-> {
                             cicloTerminar();
@@ -562,23 +639,24 @@ class TwoPCControlador{
             System.out.println("Recebi prepared!" + o);
             try {
                 Msg nova = s.decode(m);
+                Transaction taux = transacoes.get(nova.id);
 
                 //pensar depois para o caso em que a transacao está terminada
                 System.out.println("Passei decode!");
-                if(!transacoes.get(nova.id).resultado.equals("I")){
+                if(!taux.resultado.equals("I")){
                     //já existe resultado diferente de I e então pode-se mandar mensagem consoante esse resultado
 
-                    if(!transacoes.get(nova.id).resultado.equals("F")) {
+                    if(!taux.resultado.equals("F")) {
                         //e o resultado n é F
-                        String assunto = "commit"; //vamos mandar commit caso o resultado n seja A
-
-                        if (transacoes.get(nova.id).resultado.equals("A")) {
-                            assunto = "abort"; //vamos mandar abort caso o resultado seja A
+                        if (taux.resultado.equals("A")) {
+                            Msg paraMandar = new Msg(nova.id);
+                            enviaAbort(paraMandar, o).get();
                         }
 
-                        //mandar mensagem para o que enviou
-                        Msg paraMandar = new Msg(nova.id);
-                        ms.sendAsync(o, assunto, s.encode(paraMandar));
+                        else{
+                            MsgCommit paraMandar = new MsgCommit(nova.id,taux.participantes.get(o));
+                            enviaCommit(paraMandar,o).get();
+                        }
                     }
                 }
 
@@ -604,10 +682,8 @@ class TwoPCControlador{
                         System.out.println("Transacao efetuada com sucesso!");
 
                         //mandar mensagem a todos a dizer commit
-                        for(Address a: t.participantes.keySet()) {
-                            MsgCommit msgC = new MsgCommit(nova.id, t.participantes.get(a));
-                            ms.sendAsync(a, "commit", s.encode(msgC));
-                        }
+                        MsgCommit msgC = new MsgCommit(nova.id, null);
+                        enviaCommit(msgC,new ArrayList<>(t.participantes.keySet()),t).get();
 
                         System.out.println("Resultado depois: " + transacoes.get(nova.id).resultado);
 
@@ -632,7 +708,13 @@ class TwoPCControlador{
             if(transacoes.get(nova.id).resultado.equals("A")){
                 //já tem resultado, pelo que já mandou para todos e só mandamos para o que enviou
                 Msg paraMandar = new Msg(nova.id);
-                ms.sendAsync(a, "abort", s.encode(paraMandar));
+                try {
+                    enviaAbort(paraMandar,a).get();
+                } catch (InterruptedException e1) {
+                    e1.printStackTrace();
+                } catch (ExecutionException e1) {
+                    e1.printStackTrace();
+                }
             }
             else {
                 if (transacoes.get(nova.id).resultado.equals("C") || transacoes.get(nova.id).resultado.equals("F")) {
@@ -642,6 +724,7 @@ class TwoPCControlador{
                 else {
                     //pode-se por o resultado a A, pois um abortou
                     writerLog.append(new LogEntry(nova.id, "A", null));
+
 
                     transacoes.get(nova.id).resultado = "A";
                     int indiceAux = paraCancelar.indexOf(Integer.valueOf(nova.id));
@@ -653,8 +736,13 @@ class TwoPCControlador{
 
                     //mandar mensagem para todos os participantes daquela transacao
                     Msg paraMandar = new Msg(nova.id);
-                    for (Address ad : transacoes.get(id).participantes.keySet())
-                        ms.sendAsync(ad, "abort", s.encode(paraMandar));
+                    try {
+                        enviaAbort(paraMandar, new ArrayList<>(transacoes.get(nova.id).participantes.keySet())).get();
+                    } catch (InterruptedException e1) {
+                        e1.printStackTrace();
+                    } catch (ExecutionException e1) {
+                        e1.printStackTrace();
+                    }
 
                     es.schedule(() -> {
                         cicloTerminar();
@@ -678,18 +766,26 @@ class TwoPCControlador{
 
 
             Transaction t = transacoes.get(idT);
-            HashSet<Address> naoResponderam = new HashSet(t.participantes.keySet());
+            ArrayList<Address> naoResponderam = new ArrayList<>(t.participantes.keySet());
             naoResponderam.removeAll(t.quaisResponderam);
 
             if(t.resultado.equals("A")){
                 Msg msg = new Msg(t.xid);
-                for(Address a: naoResponderam)
-                    ms.sendAsync(a, t.resultado, s.encode(msg));
+                try {
+                    enviaAbort(msg,naoResponderam).get();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                } catch (ExecutionException e) {
+                    e.printStackTrace();
+                }
             }else{
                 MsgCommit msg = new MsgCommit(t.xid, null);
-                for(Address a: naoResponderam){
-                    msg.valores = t.participantes.get(a);
-                    ms.sendAsync(a, t.resultado, s.encode(msg));
+                try {
+                    enviaCommit(msg,naoResponderam,t).get();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                } catch (ExecutionException e) {
+                    e.printStackTrace();
                 }
             }
 
@@ -725,36 +821,21 @@ class TwoPCControlador{
             novaTransacao.terminada = new CompletableFuture<Boolean>();
             transacoes.put(xid,novaTransacao);
 
-            for(Address a: participantes.keySet()){
-                System.out.println("Vou mandar a: " + a);
-                ms.sendAsync(a, "prepared", s.encode(paraMandar));
-            }
+        try {
+            enviaPrepared(paraMandar,new ArrayList<>(participantes.keySet())).get();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
 
-            paraCancelar.add(paraMandar.id); //adicionar este id ao array para cancelar a transacao com o id
-            possoCancelar.add(true); //para já podemos cancelar (até que alguem ponha resposta)
+        paraCancelar.add(paraMandar.id); //adicionar este id ao array para cancelar a transacao com o id
+        possoCancelar.add(true); //para já podemos cancelar (até que alguem ponha resposta)
 
             es.schedule( ()-> {
-                int idT = paraCancelar.remove(0);
-                boolean cancelo = possoCancelar.remove(0);
-
-                if(cancelo) {
-                    writerLog.append(new LogEntry(idT,"A",null));
-                    transacoes.get(idT).resultado = "A";
-                    paraTerminar.add(idT);
-                    possoTerminar.add(false);
-                    System.out.println("Res: " + transacoes.get(idT).resultado);
-                    Msg paraMandarAux = new Msg(idT);
-                    for(Address a : transacoes.get(idT).participantes.keySet())
-                        ms.sendAsync(a, "abort", s.encode(paraMandarAux));
-
-
-                    es.schedule(() -> {
-                        cicloTerminar();
-                    }, DELTA, TimeUnit.SECONDS);
-                }
+                passouTempoTransacao();
             }, DELTA, TimeUnit.SECONDS);
 
-        }
     }
 }
 
