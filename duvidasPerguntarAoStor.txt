@@ -1,0 +1,10 @@
+* como fazer para responder de imediato e n ter de responder passados 20s
+
+* a abordagem utilizada para o reenvio parece funcional?
+
+* querendo usar 2PL como vai ser modular?
+visto que na mensagem de lock tem de ir o commit
+pode-se mandar como sendo um object? e depois faz-se parsing?
+
+* chega usar 2PL?
+visto que continua com algumas limitações

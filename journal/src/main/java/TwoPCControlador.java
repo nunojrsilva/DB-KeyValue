@@ -30,17 +30,15 @@ public class TwoPCControlador extends TwoPC{
 
     private CompletableFuture<Void> enviaCommit(MsgCommit mc, List<Address> part, Transaction t){
 
-        if( part.size() == 0 ) {
-            return CompletableFuture.completedFuture(null);
+        for(Address ad: part){
+            try {
+                mc.valores = t.participantes.get(ad);
+                ms.sendAsync(ad, "commit", s.encode(mc)).get();
+            }catch(Exception e) {
+                System.out.println(e);
+            }
         }
-        else {
-            Address ad = part.remove(0);
-            mc.valores = t.participantes.get(ad);
-            return ms.sendAsync(ad, "commit", s.encode(mc))
-                    .thenCompose(aux -> {
-                        return enviaCommit(mc,part,t);
-                    });
-        }
+        return CompletableFuture.completedFuture(null);
     }
 
     private CompletableFuture<Void> enviaCommit(MsgCommit mc,Address ad) {
@@ -53,30 +51,28 @@ public class TwoPCControlador extends TwoPC{
 
     private CompletableFuture<Void> enviaPrepared(Msg m, List<Address> part){
 
-        if( part.size() == 0 ) {
-            return CompletableFuture.completedFuture(null);
+        for(Address ad: part){
+            try {
+                ms.sendAsync(ad, "prepared", s.encode(m)).get();
+            }catch(Exception e) {
+                System.out.println(e);
+            }
         }
-        else {
-            Address ad = part.remove(0);
-            return ms.sendAsync(ad, "prepared", s.encode(m))
-                    .thenCompose(aux -> {
-                        return enviaPrepared(m,part);
-                    });
-        }
+
+        return CompletableFuture.completedFuture(null);
     }
 
     private CompletableFuture<Void> enviaAbort(Msg m, List<Address> part){
 
-        if( part.size() == 0 ) {
-            return CompletableFuture.completedFuture(null);
+        for(Address ad: part){
+            try {
+                ms.sendAsync(ad, "abort", s.encode(m)).get();
+            }catch(Exception e) {
+                System.out.println(e);
+            }
         }
-        else {
-            Address ad = part.remove(0);
-            return ms.sendAsync(ad, "abort", s.encode(m))
-                    .thenCompose(aux -> {
-                        return enviaPrepared(m,part);
-                    });
-        }
+
+        return CompletableFuture.completedFuture(null);
     }
 
     private CompletableFuture<Void> enviaAbort(Msg m,Address ad) {
@@ -103,7 +99,7 @@ public class TwoPCControlador extends TwoPC{
             } catch (InterruptedException e) {
                 e.printStackTrace();
             } catch (ExecutionException e) {
-                e.printStackTrace();
+                System.out.println(e.getMessage());
             }
 
             es.schedule(() -> {
@@ -126,7 +122,7 @@ public class TwoPCControlador extends TwoPC{
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 } catch (ExecutionException e) {
-                    e.printStackTrace();
+                    System.out.println(e.getMessage());
                 }
 
                 //dar tempo para a resposta
@@ -149,7 +145,7 @@ public class TwoPCControlador extends TwoPC{
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     } catch (ExecutionException e) {
-                        e.printStackTrace();
+                        System.out.println(e.getMessage());
                     }
 
                     es.schedule( ()-> {
@@ -168,7 +164,7 @@ public class TwoPCControlador extends TwoPC{
                         } catch (InterruptedException e) {
                             e.printStackTrace();
                         } catch (ExecutionException e) {
-                            e.printStackTrace();
+                            System.out.println(e.getMessage());
                         }
 
                         es.schedule( ()-> {
@@ -336,6 +332,7 @@ public class TwoPCControlador extends TwoPC{
         },es);
 
         ms.registerHandler("abort", (a,m)-> {
+            System.out.println("Recebi abort:" + a);
             Msg nova = s.decode(m);
             System.out.println("Recebi abort: " + nova.id + "!" + a);
 
@@ -347,7 +344,7 @@ public class TwoPCControlador extends TwoPC{
                 } catch (InterruptedException e1) {
                     e1.printStackTrace();
                 } catch (ExecutionException e1) {
-                    e1.printStackTrace();
+                    System.out.println(e1.getMessage());
                 }
             }
             else {
@@ -375,7 +372,7 @@ public class TwoPCControlador extends TwoPC{
                     } catch (InterruptedException e1) {
                         e1.printStackTrace();
                     } catch (ExecutionException e1) {
-                        e1.printStackTrace();
+                        System.out.println(e1.getMessage());
                     }
 
                     es.schedule(() -> {
@@ -404,7 +401,7 @@ public class TwoPCControlador extends TwoPC{
             } catch (InterruptedException exc) {
                 exc.printStackTrace();
             } catch (ExecutionException exc) {
-                exc.printStackTrace();
+                System.out.println(exc.getMessage());
             }
 
             paraCancelar.add(paraMandar.id); //adicionar este id ao array para cancelar a transacao com o id
@@ -425,7 +422,7 @@ public class TwoPCControlador extends TwoPC{
                     } catch (InterruptedException e1) {
                         e1.printStackTrace();
                     } catch (ExecutionException e1) {
-                        e1.printStackTrace();
+                        System.out.println(e1.getMessage());
                     }
                 });
 
@@ -454,7 +451,7 @@ public class TwoPCControlador extends TwoPC{
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 } catch (ExecutionException e) {
-                    e.printStackTrace();
+                    System.out.println(e.getMessage());
                 }
             }else{
                 MsgCommit msg = new MsgCommit(t.xid, null);
@@ -463,7 +460,7 @@ public class TwoPCControlador extends TwoPC{
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 } catch (ExecutionException e) {
-                    e.printStackTrace();
+                    System.out.println(e.getMessage());
                 }
             }
 
@@ -504,7 +501,7 @@ public class TwoPCControlador extends TwoPC{
         } catch (InterruptedException e) {
             e.printStackTrace();
         } catch (ExecutionException e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         }
 
         paraCancelar.add(paraMandar.id); //adicionar este id ao array para cancelar a transacao com o id

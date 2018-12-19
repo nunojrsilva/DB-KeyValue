@@ -145,6 +145,7 @@ class TwoPCParticipante extends TwoPC{
         recuperaLogParticipante();
 
         ms.registerHandler("prepared", (a,m)-> {
+            System.out.println("Recebi prepared!");
             Msg nova = s.decode(m);
 
             /**
@@ -228,6 +229,7 @@ class TwoPCParticipante extends TwoPC{
         }, es);
 
         ms.registerHandler("abort", (a,m)-> {
+            System.out.println("Recebi abort!");
             Msg nova = s.decode(m);
 
             if(transacoes.containsKey(nova.id) == false){
@@ -261,6 +263,7 @@ class TwoPCParticipante extends TwoPC{
         }, es);
 
         ms.registerHandler("commit", (a,m)-> {
+            System.out.println("Recebi commit!");
             MsgCommit nova = s.decode(m);
 
             if(transacoes.containsKey(nova.id) == false){
@@ -280,7 +283,6 @@ class TwoPCParticipante extends TwoPC{
                      * --> Adicionar a transacao no hashmap
                      */
                     System.out.println("Vou guardar os valores para a transacao " + nova.id);
-                    writerLog.append(new LogEntry(nova.id, "C", nova.valores));
                     for(Map.Entry<Long, byte[]> entry: nova.valores.entrySet()){
                         /**
                          * Senão tiver a key, entao devo de adicionar tudo
@@ -290,6 +292,7 @@ class TwoPCParticipante extends TwoPC{
                         byte[] value = entry.getValue();
                         valores.put(key, value);
                     }
+                    writerLog.append(new LogEntry(nova.id, "C", valores));
 
                     Transaction t = transacoes.get(nova.id);
                     t.resultado = "C";

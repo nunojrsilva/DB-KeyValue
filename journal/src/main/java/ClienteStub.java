@@ -30,12 +30,15 @@ public class ClienteStub {
    }
 
    public void verificaPedido(){
+       System.out.println("Verificar pedido!");
        int idP = pedidos.remove(0);
        Pedido p = mapaPedidos.get(idP);
 
        if(p instanceof PedidoPut){
+           System.out.println("Verificar pedido put!" + ((PedidoPut) p).id);
            PedidoPut pp = (PedidoPut) p;
            if(pp.finalizado){
+                System.out.println("finalizado!");
                 resultadoPedidos.get(pp.id).complete(pp.resultado);
            }
            else{
@@ -47,7 +50,7 @@ public class ClienteStub {
                        pp.finalizado = true;
                        mapaPedidos.put(rpp.id,rpp);
                });
-               */
+                */
 
                es.schedule(() -> {
                    verificaPedido();
@@ -80,6 +83,7 @@ public class ClienteStub {
         ms.registerHandler("put", (a,m)->{
             System.out.println("Está completo!");
             PedidoPut rpp = s.decode(m);
+            System.out.println(pp.id);
             rpp.finalizado = true;
             mapaPedidos.put(rpp.id,rpp);
         },es);
@@ -90,10 +94,21 @@ public class ClienteStub {
                 mapaPedidos.put(rpp.id,rpp);
 
         });*/
-
+        /*ms.sendAndReceive(Address.from(coordenadores[coordAtual]),"put", s.encode(pp), Duration.ofSeconds(20),es)
+                .whenComplete((dados,erro) -> {
+                    if(erro!=null){
+                        System.out.println("Deu erro!");
+                        return;
+                    }
+                    /*PedidoPut rpp = s.decode(aux);
+                    pp.finalizado = true;
+                    mapaPedidos.put(rpp.id,rpp);*/
+        /*            System.out.println(("Recebi resposta: " + s.decode(dados)));
+                });
+        */
         es.schedule(() -> {
             verificaPedido();
-        },20, TimeUnit.SECONDS);
+        },8, TimeUnit.SECONDS);
 
         return res;
     }
