@@ -1,10 +1,18 @@
-* como fazer para responder de imediato e n ter de responder passados 20s
+* a parte de escrever nos sockets basta fazer get ao iterar para escrever para cada um?
 
 * a abordagem utilizada para o reenvio parece funcional?
 
 * querendo usar 2PL como vai ser modular?
 visto que na mensagem de lock tem de ir o commit
 pode-se mandar como sendo um object? e depois faz-se parsing?
+para além disto temos de estar sempre a reenviar certo? no minimo até perceber q o coordenador nos responda
+o 2PC é todo realizado com 2PL?
 
 * chega usar 2PL?
 visto que continua com algumas limitações
+
+* na parte das retransmissoes tanto o participante deve retransmitir o reslutado qd vai abaixo como o coordenador deve estar sempre a trasmitir até ter confirmação de todos, certo?
+podia bastar apenas um dos dois em certos casos, mas assim é mais "seguro" e talvez geral
+so temos mais mensagens
+
+* sendAndReceive?
