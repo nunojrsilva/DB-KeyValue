@@ -51,15 +51,26 @@ public class TwoPCControlador extends TwoPC{
 
     private CompletableFuture<Void> enviaPrepared(Msg m, List<Address> part){
 
-        for(Address ad: part){
+        /*for(Address ad: part){
             try {
                 ms.sendAsync(ad, "prepared", s.encode(m)).get();
             }catch(Exception e) {
                 System.out.println(e);
             }
+        }*/
+
+
+        /*if(part.size()==0){
+            return CompletableFuture.completedFuture(null);
         }
 
-        return CompletableFuture.completedFuture(null);
+        Address ad = part.remove(0);
+        try {
+            return ms.sendAsync(ad, "prepared", s.encode(m)).get();
+        }catch(Exception e) {
+            System.out.println(e);
+        }
+        */
     }
 
     private CompletableFuture<Void> enviaAbort(Msg m, List<Address> part){

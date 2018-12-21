@@ -93,19 +93,19 @@ public class ClienteStub {
                 rpp.finalizado = true;
                 mapaPedidos.put(rpp.id,rpp);
 
-        });*/
+        });
         /*ms.sendAndReceive(Address.from(coordenadores[coordAtual]),"put", s.encode(pp), Duration.ofSeconds(20),es)
                 .whenComplete((dados,erro) -> {
                     if(erro!=null){
                         System.out.println("Deu erro!");
                         return;
                     }
-                    /*PedidoPut rpp = s.decode(aux);
+                    PedidoPut rpp = s.decode(aux);
                     pp.finalizado = true;
-                    mapaPedidos.put(rpp.id,rpp);*/
-        /*            System.out.println(("Recebi resposta: " + s.decode(dados)));
+                    mapaPedidos.put(rpp.id,rpp);
+                    System.out.println(("Recebi resposta: " + s.decode(dados)));
                 });
-        */
+    */
         es.schedule(() -> {
             verificaPedido();
         },8, TimeUnit.SECONDS);
