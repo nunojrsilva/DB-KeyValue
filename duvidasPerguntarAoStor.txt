@@ -1,5 +1,5 @@
 * a parte de escrever nos sockets basta fazer get ao iterar para escrever para cada um?
-X    so podemos escrever se o handler estiver completo para o mm servidor
+X  so podemos escrever se o handler estiver completo para o mm servidor (penso que já está feito)
 
 * a abordagem utilizada para o reenvio parece funcional?
 X (parece)
@@ -21,4 +21,8 @@ so temos mais mensagens
 X basta um retransmitir (decidir qual)
 
 * sendAndReceive?
-X (tem de dar uma resposta) 
+X (tem de dar uma resposta) - nao funciona se retornar um completablefuture, só se retornar byte[]
+(esperar por resposta do stor)
+
+
+------------------ VER SO QUE O SCHEDULE PRESERVA O VALOR DAS VARIAVEIS Q SAO PASSADAS PARECE-ME -----------------------
