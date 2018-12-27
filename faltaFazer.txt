@@ -1,5 +1,7 @@
 FALTA:
 
+-> garantir que o participante so escreve para os coordenadores caso as outras escritas estejam completas
+
 -> fazer o get
 
 -> decidir isto dos pedidos
@@ -7,3 +9,5 @@ FALTA:
 -> recuperar o log com os pedidos associados à transacao e com o 2pl
 
 -> fazer o 2pl
+
+-> implementar multiplos coordenadores
