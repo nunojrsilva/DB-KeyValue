@@ -1,0 +1,9 @@
+FALTA:
+
+-> fazer o get
+
+-> decidir isto dos pedidos
+
+-> recuperar o log com os pedidos associados à transacao e com o 2pl
+
+-> fazer o 2pl

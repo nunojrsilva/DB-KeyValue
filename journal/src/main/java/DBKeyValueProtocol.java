@@ -58,21 +58,16 @@ class LogEntry {
 }
 
 interface Pedido{
-    String getCoordenador();
     boolean finalizado();
     void finaliza(Object o);
 }
 
 class PedidoGet implements Pedido{
     public Collection<Long> keys;
-    public String coordenador;
     public boolean finalizado;
     public HashMap<Long,byte[]> resultado;
     public int id;
 
-    public String getCoordenador(){
-        return coordenador;
-    }
     public boolean finalizado(){
         return finalizado;
     }
@@ -84,21 +79,16 @@ class PedidoGet implements Pedido{
 }
 
 class PedidoPut implements Pedido{
-    public String coordenador;
     public boolean finalizado = false;
     public Map<Long,byte[]> valores;
     public boolean resultado;
     public int id;
 
-    public PedidoPut(String coordenador, Map<Long, byte[]> valores, int id) {
-        this.coordenador = coordenador;
+    public PedidoPut(Map<Long, byte[]> valores, int id) {
         this.valores = valores;
         this.id = id;
     }
 
-    public String getCoordenador(){
-        return coordenador;
-    }
     public boolean finalizado(){
         return finalizado;
     }

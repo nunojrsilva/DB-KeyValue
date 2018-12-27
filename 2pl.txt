@@ -1,0 +1,33 @@
+::::::::::::::::::::::::::::::::2PL::::::::::::::::::::::::::::::.
+
+-------PARTICIPANTE----------
+
+precisa de saber:
+
+    quem tem o seu lock
+
+    queue com quem quer o seu lock
+
+precisa de implementar:
+
+    ao receber "prepared" -> lock implicito, só responde quando obtiver o lock
+                                no entanto se já tiver uma resposta para essa transacao então passa à frente
+
+    ao receber "commit"/"abort" -> unlock implicito. liberta o lock e responde ao proximo da queue
+                                    (caso não seja este que tenha o lock pode retirar o mesmo da queue)
+
+------------COORDENADOR--------------
+
+penso que nao precisa de saber nada
+
+ao receber "ok" considera um unlock
+
+tem de garantir os locks sempre pela mesma ordem, e só pode enviar uma mensagem para o próximo quando receber confirmação de que garantiu o lock atual
+
+convem garantir que sabemos sempre quem respondeu ao prepared
+
+
+====================
+Depois pensar nas retransmissoes e nas escritas e leituras do log
+
+(para ja aquilo é só em casos no qual n vao abaixo)

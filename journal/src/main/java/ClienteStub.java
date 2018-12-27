@@ -3,6 +3,7 @@ import io.atomix.cluster.messaging.ManagedMessagingService;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
 import io.atomix.utils.serializer.Serializer;
 
+import java.lang.reflect.Array;
 import java.time.Duration;
 
 import java.util.ArrayList;
@@ -14,7 +15,8 @@ import java.util.concurrent.*;
 
 public class ClienteStub {
 
-   private String[] coordenadores = {"localhost:23451"};
+   private HashMap<Address, Participante> coordenadores = new HashMap<>();
+   private ArrayList<Address> coordEnderecos = new ArrayList<>();
    private int coordAtual= 0;
    private int pedidoAtual = 0;
    private ManagedMessagingService ms;
@@ -26,6 +28,11 @@ public class ClienteStub {
    public ClienteStub(ManagedMessagingService ms, int pa){
         this.ms = ms;
         pedidoAtual = pa;
+        Participante part = new Participante();
+        Address partEnd = Address.from("localhost:23451");
+        part.endereco = partEnd;
+        coordenadores.put(partEnd,part);
+        coordEnderecos.add(partEnd);
         //inicializar Serializer
         this.ms.registerHandler("put", (a,m)->{
            System.out.println("Está completo!");
@@ -37,7 +44,30 @@ public class ClienteStub {
        },es);
    }
 
-   public void verificaPedido(int i){
+    private CompletableFuture<Void> enviaMensagem(byte[] m, String assunto, Address a){
+        Participante part = coordenadores.get(a);
+
+        CompletableFuture<Void> meu = new CompletableFuture<Void>();
+
+        ArrayList<CompletableFuture<Void>> esperarFuturo = new ArrayList<>(part.espera);
+        CompletableFuture<Void>[] esperar = esperarFuturo.toArray(new CompletableFuture[esperarFuturo.size()]);
+        part.espera.add(meu);
+
+        return CompletableFuture.allOf(esperar).thenAccept(v -> {
+            try{
+                ms.sendAsync(a,assunto,m).thenAccept(msR -> {
+                    meu.complete(null);
+                });
+            }
+            catch(Exception e){
+                System.out.println("Erro enviar mensagem: " + e); //podemos é por a remover
+                meu.complete(null); //quando estiver completo
+            }
+        });
+    }
+
+
+    public void verificaPedido(int i, Address ad){
         System.out.println("Verificar pedido!");
 
         Pedido p = mapaPedidos.get(i);
@@ -48,10 +78,11 @@ public class ClienteStub {
                 resultadoPedidos.get(i).complete(pp.resultado);
             }
             else{
-                ms.sendAsync(Address.from(coordenadores[coordAtual]),"put", s.encode(pp));
+                enviaMensagem(s.encode(pp), "put", ad);
+
                 //reenviar mensagem
                 es.schedule(() -> {
-                    verificaPedido(pp.id);
+                    verificaPedido(pp.id, ad);
                 },8, TimeUnit.SECONDS);
             }
         }
@@ -63,16 +94,18 @@ public class ClienteStub {
     public CompletableFuture<Boolean> put(Map<Long,byte[]> values) {
         //
         CompletableFuture<Boolean> res = new CompletableFuture<Boolean>();
-        PedidoPut pp = new PedidoPut(coordenadores[coordAtual], values, pedidoAtual++);
+        PedidoPut pp = new PedidoPut(values, pedidoAtual++);
         mapaPedidos.put(pp.id, pp);
         resultadoPedidos.put(pp.id, res);
 
-        ms.sendAsync(Address.from(coordenadores[coordAtual]),"put", s.encode(pp));
+        enviaMensagem(s.encode(pp), "put", coordenadores.get(coordEnderecos.get(coordAtual)).endereco);
+        //ms.sendAsync(coordenadores.get(coordEnderecos.get(coordAtual)).endereco,"put", s.encode(pp));
 
         es.schedule(() -> {
-            verificaPedido(pp.id);
+            verificaPedido(pp.id, coordenadores.get(coordEnderecos.get(coordAtual)).endereco);
         },8, TimeUnit.SECONDS);
 
+        coordAtual = (coordAtual + 1) % coordEnderecos.size();
         return res;
     }
 
