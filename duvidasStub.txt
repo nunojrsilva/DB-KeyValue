@@ -1,0 +1,16 @@
+//Duvidas stub
+
+Para garantir que não são realizados 2 pedidos iguais o pedido tem de ter um id.
+No lado do coordenador esse id tem de ser único, para que caso já tenha recebido um pedido com esse id
+não comece um novo. Para ser unico tem de ser um par (endereco,id do pedido). Existe apenas um problema,
+sempre que o stub vai abaixo recomeça o id pelo que provavelmente das 2 uma:
+
+-> os clientes tem todos address diferentes sempre
+-> ou tem de existir forma de indicar em qual id aquele stub vai (por um log, ou passando mm o id)
+
+---------------
+Para alem disto vai ser necessario associar um pedido a uma transacao e guardar no log isso tbm.
+
+
+------------------------
+Falta tambem o get!

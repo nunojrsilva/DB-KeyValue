@@ -17,11 +17,12 @@ public class Cliente {
                 .build();
         ms.start();
 
-        ClienteStub cs = new ClienteStub(ms);
+        ClienteStub cs = new ClienteStub(ms, Integer.parseInt(args[0]));
 
         cs.put(valores)
             .thenAccept(a -> {
-                System.out.println(a);
-            });
+                System.out.println("Resultado: " + a);
+        });
+
     }
 }

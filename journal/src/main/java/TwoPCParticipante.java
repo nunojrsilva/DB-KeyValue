@@ -192,13 +192,9 @@ class TwoPCParticipante extends TwoPC{
                 Transaction t = new Transaction(nova.id, "A");
                 transacoes.put(nova.id, t);
                 Msg paraMandar = new Msg(nova.id);
-                try {
-                    enviaAbort(paraMandar,end[0]).get();
-                } catch (InterruptedException e1) {
-                    e1.printStackTrace();
-                } catch (ExecutionException e1) {
-                    e1.printStackTrace();
-                }
+
+                enviaAbort(paraMandar,end[0]);
+
             }
             else{
                 /**
@@ -209,13 +205,8 @@ class TwoPCParticipante extends TwoPC{
                 Transaction t = new Transaction(nova.id, "P");
                 transacoes.put(nova.id, t);
                 Msg paraMandar = new Msg(nova.id);
-                try {
-                    enviaPrepared(paraMandar,end[0]).get();
-                } catch (InterruptedException e1) {
-                    e1.printStackTrace();
-                } catch (ExecutionException e1) {
-                    e1.printStackTrace();
-                }
+                enviaPrepared(paraMandar,end[0]);
+
             }
 
             /**

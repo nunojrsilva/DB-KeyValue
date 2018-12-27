@@ -5,8 +5,16 @@ import io.atomix.storage.journal.SegmentedJournalWriter;
 import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+
+class Participante{
+    public Address endereco;
+    public ArrayList<CompletableFuture<Void>> espera = new ArrayList<>();
+}
 
 public class TwoPC {
     SegmentedJournal<Object> log;
@@ -18,11 +26,17 @@ public class TwoPC {
     ManagedMessagingService ms;
     Serializer s;
     ScheduledExecutorService es;
+    HashMap<Address,Participante> participantes = new HashMap<Address,Participante>();
 
     public TwoPC(Address[] end, int meuID, ManagedMessagingService ms) {
         this.end = end;
         this.meuID = meuID;
         this.ms = ms;
+        for(Address ad: end){
+            Participante part = new Participante();
+            part.endereco = ad;
+            participantes.put(ad,part);
+        }
 
         s = DBKeyValueProtocol.newSerializer();
 

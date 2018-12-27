@@ -6,12 +6,28 @@ import io.atomix.storage.journal.SegmentedJournalWriter;
 import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.*;
 
+class PedidoID{
+    public Address ad;
+    public int id;
+
+    public PedidoID(Address a, int i){
+        ad = a;
+        id = i;
+    }
+
+    public boolean equals(Object o){
+        if(o == null || !(o instanceof PedidoID)){
+            return false;
+        }
+
+        PedidoID pi = (PedidoID)o;
+        return ((id==pi.id) && (ad.equals(pi.ad)));
+    }
+
+}
 public class TwoPCControlador extends TwoPC{
 
     private final int DELTA = 10;
@@ -24,60 +40,68 @@ public class TwoPCControlador extends TwoPC{
     // dos logs
 
     private HashMap<Integer, Transaction> transacoes = new HashMap<>();
+    private HashMap<PedidoID,Integer> pedidos = new HashMap<>();
     private int xid;
 
     //private Consumer<Msg> handlerMensagem;
+
+    private CompletableFuture<Void> enviaMensagem(Msg m, String assunto, Address a){
+        Participante part = participantes.get(a);
+
+        CompletableFuture<Void> meu = new CompletableFuture<Void>();
+
+        ArrayList<CompletableFuture<Void>> esperarFuturo = new ArrayList<>(part.espera);
+        CompletableFuture<Void>[] esperar = esperarFuturo.toArray(new CompletableFuture[esperarFuturo.size()]);
+        part.espera.add(meu);
+
+        return CompletableFuture.allOf(esperar).thenAccept(v -> {
+            try{
+                ms.sendAsync(a,assunto,s.encode(m)).thenAccept(msR -> {
+                    meu.complete(null);
+                });
+            }
+            catch(Exception e){
+                System.out.println("Erro enviar mensagem: " + e); //podemos é por a remover
+                meu.complete(null); //quando estiver completo
+            }
+        });
+    }
 
     private CompletableFuture<Void> enviaCommit(MsgCommit mc, List<Address> part, Transaction t){
 
         for(Address ad: part){
             try {
                 mc.valores = t.participantes.get(ad);
-                ms.sendAsync(ad, "commit", s.encode(mc)).get();
+                enviaMensagem(mc,"commit",ad);
             }catch(Exception e) {
                 System.out.println(e);
             }
         }
-        return CompletableFuture.completedFuture(null);
+        return CompletableFuture.completedFuture(null); //pode ser um allOf futuramente
     }
 
     private CompletableFuture<Void> enviaCommit(MsgCommit mc,Address ad) {
 
-        return ms.sendAsync(ad, "commit", s.encode(mc))
-                .thenCompose(aux -> {
-                    return CompletableFuture.completedFuture(null);
-                });
+        return enviaMensagem(mc,"commit", ad);
     }
 
     private CompletableFuture<Void> enviaPrepared(Msg m, List<Address> part){
 
-        /*for(Address ad: part){
+        for(Address ad: part){
             try {
-                ms.sendAsync(ad, "prepared", s.encode(m)).get();
+                enviaMensagem(m,"prepared",ad);
             }catch(Exception e) {
                 System.out.println(e);
             }
-        }*/
-
-
-        /*if(part.size()==0){
-            return CompletableFuture.completedFuture(null);
         }
-
-        Address ad = part.remove(0);
-        try {
-            return ms.sendAsync(ad, "prepared", s.encode(m)).get();
-        }catch(Exception e) {
-            System.out.println(e);
-        }
-        */
+        return CompletableFuture.completedFuture(null); //pode ser um allOf futuramente
     }
 
     private CompletableFuture<Void> enviaAbort(Msg m, List<Address> part){
 
         for(Address ad: part){
             try {
-                ms.sendAsync(ad, "abort", s.encode(m)).get();
+                enviaMensagem(m,"abort",ad);
             }catch(Exception e) {
                 System.out.println(e);
             }
@@ -88,10 +112,7 @@ public class TwoPCControlador extends TwoPC{
 
     private CompletableFuture<Void> enviaAbort(Msg m,Address ad) {
 
-        return ms.sendAsync(ad, "abort", s.encode(m))
-                .thenCompose(aux -> {
-                    return CompletableFuture.completedFuture(null);
-                });
+        return enviaMensagem(m,"abort",ad);
     }
 
     private void passouTempoTransacao(){
@@ -395,49 +416,139 @@ public class TwoPCControlador extends TwoPC{
             }
         }, es);
 
-        ms.registerHandler("put", (a,m) -> {
+        ms.registerHandler("put",(a,m) -> {
+
             PedidoPut pp = s.decode(m);
-            HashMap<Long,byte[]> valores = new HashMap<>(pp.valores);
-            writerLog.append(new LogEntry(++xid,"I",valores));
+
+            PedidoID pi = new PedidoID(a,pp.id);
+
+            for(Map.Entry<PedidoID,Integer> mePi : pedidos.entrySet()){
+                if(mePi.getKey().equals(pi)){
+                    System.out.println("Pedido já existe! Decidir o que temos de fazer");
+                    transacoes.get(mePi.getValue()).terminada
+                        .thenAccept(res -> {
+                            System.out.println("Terminada, posso mandar resultado!");
+                            pp.resultado = res;
+                            pp.finalizado = true;
+                            System.out.println("Enviar a: " + a);
+                            byte[] auxPut = s.encode(pp);
+                            ms.sendAsync(a,"put",auxPut);
+                            System.out.println("Enviei resposta!");
+                    });
+                    return;
+                }
+            }
+
+            System.out.println("Nao existe!");
+            HashMap<Long, byte[]> valores = new HashMap<>(pp.valores);
+            writerLog.append(new LogEntry(++xid, "I", valores));
+            pedidos.put(pi,xid);
 
             //mandar mensagem para todos para iniciar transacao
             Msg paraMandar = new Msg(xid);
-            HashMap<Address,HashMap<Long,byte[]>> participantes = participantesEnvolvidos(valores);
+            HashMap<Address, HashMap<Long, byte[]>> participantes = participantesEnvolvidos(valores);
             Transaction novaTransacao = new Transaction(xid, "I", participantes);
             novaTransacao.terminada = new CompletableFuture<Boolean>();
-            transacoes.put(xid,novaTransacao);
+            transacoes.put(xid, novaTransacao);
 
-            try {
-                enviaPrepared(paraMandar,new ArrayList<>(participantes.keySet())).get();
-            } catch (InterruptedException exc) {
-                exc.printStackTrace();
-            } catch (ExecutionException exc) {
-                System.out.println(exc.getMessage());
-            }
+            enviaPrepared(paraMandar, new ArrayList<>(participantes.keySet())); //depois aqui vai ter thenQQCoisa
+
 
             paraCancelar.add(paraMandar.id); //adicionar este id ao array para cancelar a transacao com o id
             possoCancelar.add(true); //para já podemos cancelar (até que alguem ponha resposta)
 
-            es.schedule( ()-> {
+            es.schedule(() -> {
+                try{
+                    System.out.println("Passou tempo");
+                    System.out.println("Esta terminado o tempo de: " + paraMandar.id);
+                }
+                catch(Exception exc){
+                    System.out.println(exc);
+                }
                 passouTempoTransacao();
             }, DELTA, TimeUnit.SECONDS);
 
+            System.out.println("Vou terminar");
             novaTransacao.terminada
                 .thenAccept(res -> {
                     System.out.println("Terminada, posso mandar resultado!");
                     pp.resultado = res;
                     pp.finalizado = true;
-                    try {
-                        System.out.println("Enviar a: " + a);
-                        ms.sendAsync(a,"put",s.encode(pp)).get();
-                    } catch (InterruptedException e1) {
-                        e1.printStackTrace();
-                    } catch (ExecutionException e1) {
-                        System.out.println(e1.getMessage());
-                    }
-                });
+                    System.out.println("Enviar a: " + a);
+                    byte[] auxPut = s.encode(pp);
+                    ms.sendAsync(a,"put",auxPut);
+                    System.out.println("Enviei resposta!");
+            });
 
         },es);
+    }
+
+
+
+    public CompletableFuture<byte[]> funcaoPut(Address a, byte[] m){
+        CompletableFuture<byte[]> resultado = new CompletableFuture<>();
+        try {
+
+            PedidoPut pp = s.decode(m);
+
+
+            HashMap<Long, byte[]> valores = new HashMap<>(pp.valores);
+            writerLog.append(new LogEntry(++xid, "I", valores));
+
+            //mandar mensagem para todos para iniciar transacao
+            Msg paraMandar = new Msg(xid);
+            HashMap<Address, HashMap<Long, byte[]>> participantes = participantesEnvolvidos(valores);
+            Transaction novaTransacao = new Transaction(xid, "I", participantes);
+            novaTransacao.terminada = new CompletableFuture<Boolean>();
+            transacoes.put(xid, novaTransacao);
+
+            enviaPrepared(paraMandar, new ArrayList<>(participantes.keySet())); //depois aqui vai ter thenQQCoisa
+
+
+            paraCancelar.add(paraMandar.id); //adicionar este id ao array para cancelar a transacao com o id
+            possoCancelar.add(true); //para já podemos cancelar (até que alguem ponha resposta)
+
+            es.schedule(() -> {
+                try{
+                    System.out.println("Passou tempo");
+                    System.out.println("Esta terminado o tempo de: " + paraMandar.id);
+                }
+                catch(Exception exc){
+                    System.out.println(exc);
+                }
+                passouTempoTransacao();
+            }, DELTA, TimeUnit.SECONDS);
+
+            System.out.println("Vou terminar");
+            novaTransacao.terminada
+                    .thenApply(res -> {
+                        System.out.println("Terminada, posso mandar resultado!");
+                        pp.resultado = res;
+                        pp.finalizado = true;
+                        System.out.println("Enviar a: " + a);
+                        byte[] auxPut = null;
+                        try {
+                            auxPut = s.encode(res);
+                            System.out.println("RESPUT: " + auxPut + " corresponde a " + res);
+                            resultado.complete(auxPut);
+                            return auxPut;
+                        } catch (Exception exc) {
+                            System.out.println(exc);
+                        }
+                        return auxPut;
+
+                    });
+        }
+        catch(Exception e){
+            System.out.println(e);
+            resultado.complete(s.encode(false));
+        }
+        resultado.thenAccept(v -> {
+            System.out.println("Já estou completo, so um teste!!!" + s.decode(v));
+        });
+
+        return resultado; //ver isto depois
+
     }
 
     private void cicloTerminar(){

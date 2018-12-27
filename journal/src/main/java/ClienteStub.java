@@ -20,94 +20,57 @@ public class ClienteStub {
    private ManagedMessagingService ms;
    private Serializer s = DBKeyValueProtocol.newSerializer();
    private ScheduledExecutorService es = Executors.newSingleThreadScheduledExecutor();
-   private ArrayList<Integer> pedidos = new ArrayList<Integer>();
    private HashMap<Integer,Pedido> mapaPedidos = new HashMap<>();
    private HashMap<Integer,CompletableFuture<Boolean>> resultadoPedidos = new HashMap<>();
 
-   public ClienteStub(ManagedMessagingService ms){
+   public ClienteStub(ManagedMessagingService ms, int pa){
         this.ms = ms;
+        pedidoAtual = pa;
         //inicializar Serializer
+        this.ms.registerHandler("put", (a,m)->{
+           System.out.println("Está completo!");
+           PedidoPut rpp = s.decode(m);
+           System.out.println(rpp.id);
+           rpp.finalizado = true;
+           mapaPedidos.put(rpp.id,rpp);
+           resultadoPedidos.get(rpp.id).complete(rpp.resultado);
+       },es);
    }
 
-   public void verificaPedido(){
-       System.out.println("Verificar pedido!");
-       int idP = pedidos.remove(0);
-       Pedido p = mapaPedidos.get(idP);
+   public void verificaPedido(int i){
+        System.out.println("Verificar pedido!");
 
-       if(p instanceof PedidoPut){
-           System.out.println("Verificar pedido put!" + ((PedidoPut) p).id);
-           PedidoPut pp = (PedidoPut) p;
-           if(pp.finalizado){
-                System.out.println("finalizado!");
-                resultadoPedidos.get(pp.id).complete(pp.resultado);
-           }
-           else{
-               //voltar a mandar
-               pedidos.add(pp.id);
-               /*ms.sendAndReceive(Address.from(pp.coordenador),"put", s.encode(pp), Duration.ofSeconds(20),es)
-                   .thenAccept((aux) -> {
-                       PedidoPut rpp = s.decode(aux);
-                       pp.finalizado = true;
-                       mapaPedidos.put(rpp.id,rpp);
-               });
-                */
+        Pedido p = mapaPedidos.get(i);
+        if(p instanceof PedidoPut){
+            PedidoPut pp = (PedidoPut)p;
 
-               es.schedule(() -> {
-                   verificaPedido();
-               },20, TimeUnit.SECONDS);
-           }
-       }
-
-       else{
-           if(p instanceof PedidoGet){
-
-           }
-       }
+            if(pp.finalizado){
+                resultadoPedidos.get(i).complete(pp.resultado);
+            }
+            else{
+                ms.sendAsync(Address.from(coordenadores[coordAtual]),"put", s.encode(pp));
+                //reenviar mensagem
+                es.schedule(() -> {
+                    verificaPedido(pp.id);
+                },8, TimeUnit.SECONDS);
+            }
+        }
+        else{
+            //o mesmo para o get
+        }
    }
 
-    public CompletableFuture<Boolean> put(Map<Long,byte[]> values){
+    public CompletableFuture<Boolean> put(Map<Long,byte[]> values) {
         //
         CompletableFuture<Boolean> res = new CompletableFuture<Boolean>();
-        PedidoPut pp = new PedidoPut(coordenadores[coordAtual],values,pedidoAtual++);
-        pedidos.add(pp.id);
-        mapaPedidos.put(pp.id,pp);
-        resultadoPedidos.put(pp.id,res);
+        PedidoPut pp = new PedidoPut(coordenadores[coordAtual], values, pedidoAtual++);
+        mapaPedidos.put(pp.id, pp);
+        resultadoPedidos.put(pp.id, res);
 
-        try {
-            ms.sendAsync(Address.from(coordenadores[coordAtual]),"put", s.encode(pp)).get();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (ExecutionException e) {
-            e.printStackTrace();
-        }
-        ms.registerHandler("put", (a,m)->{
-            System.out.println("Está completo!");
-            PedidoPut rpp = s.decode(m);
-            System.out.println(pp.id);
-            rpp.finalizado = true;
-            mapaPedidos.put(rpp.id,rpp);
-        },es);
-          /*  .thenAccept(aux -> {
-                System.out.println("Está completo!");
-                PedidoPut rpp = s.decode(aux);
-                rpp.finalizado = true;
-                mapaPedidos.put(rpp.id,rpp);
+        ms.sendAsync(Address.from(coordenadores[coordAtual]),"put", s.encode(pp));
 
-        });
-        /*ms.sendAndReceive(Address.from(coordenadores[coordAtual]),"put", s.encode(pp), Duration.ofSeconds(20),es)
-                .whenComplete((dados,erro) -> {
-                    if(erro!=null){
-                        System.out.println("Deu erro!");
-                        return;
-                    }
-                    PedidoPut rpp = s.decode(aux);
-                    pp.finalizado = true;
-                    mapaPedidos.put(rpp.id,rpp);
-                    System.out.println(("Recebi resposta: " + s.decode(dados)));
-                });
-    */
         es.schedule(() -> {
-            verificaPedido();
+            verificaPedido(pp.id);
         },8, TimeUnit.SECONDS);
 
         return res;
