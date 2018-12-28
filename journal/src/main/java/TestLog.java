@@ -23,17 +23,31 @@ class Transaction{
     public HashSet<Address> quaisResponderam = new HashSet<>();
     public HashMap<Address, HashMap<Long, byte[]>> participantes;
     //so podemos fazer commit quando o tamanho dos dois maps forem iguais!
-    public CompletableFuture<Boolean> terminada;
+    public CompletableFuture<Boolean> terminada = new CompletableFuture<Boolean>();
+
+    public TreeSet<Participante> locksObtidos = new TreeSet<>();
+
+    public PedidoID pedido; //id do pedido para esta transacao
 
     public Transaction(int xid, String resultado){
         this.xid = xid;
         this.resultado = resultado;
+
     }
 
-    public Transaction(int xid, String resultado, HashMap<Address, HashMap<Long, byte[]>> participantes) {
+    public Transaction(int xid, String resultado, HashMap<Address, HashMap<Long, byte[]>> participantes, PedidoID p) {
         this.xid = xid;
         this.resultado = resultado;
         this.participantes = participantes;
+
+        for(Address a: participantes.keySet()){
+            Participante part = new Participante();
+            part.endereco = a;
+            locksObtidos.add(part);
+        }
+
+        System.out.println("Participantes: " + locksObtidos.size() + " para a trnasacao: " + xid);
+        pedido = p;
     }
 }
 

@@ -29,12 +29,20 @@ class LogEntry {
     public int xid;
     public String data;
     public HashMap<Long,byte[]> valores;
+    public PedidoID pedido;
 
     public LogEntry() {}
     public LogEntry(int xid, String data, HashMap<Long, byte[]> valores) {
         this.xid=xid;
         this.data=data;
         this.valores = valores;
+    }
+
+    public LogEntry(int xid, String data, HashMap<Long, byte[]> valores, PedidoID p) {
+        this.xid=xid;
+        this.data=data;
+        this.valores = valores;
+        pedido = p;
     }
 
     @Override
@@ -53,6 +61,7 @@ class LogEntry {
                 "xid=" + xid +
                 ", data='" + data + '\'' +
                 ", valores=" + mapa +
+                ", pedido=" + pedido +
                 '}';
     }
 }
@@ -66,9 +75,9 @@ class PedidoGet implements Pedido{
     public Collection<Long> keys;
     public boolean finalizado;
     public HashMap<Long,byte[]> resultado;
-    public int id;
+    public String id;
 
-    public PedidoGet ( Collection <Long> keys, int id) {
+    public PedidoGet ( Collection <Long> keys, String id) {
         this.keys = keys;
         this.id = id;
 
@@ -90,9 +99,9 @@ class PedidoPut implements Pedido{
     public boolean finalizado = false;
     public Map<Long,byte[]> valores;
     public boolean resultado;
-    public int id;
+    public String id;
 
-    public PedidoPut(Map<Long, byte[]> valores, int id) {
+    public PedidoPut(Map<Long, byte[]> valores, String id) {
         this.valores = valores;
         this.id = id;
     }
@@ -113,6 +122,7 @@ public class DBKeyValueProtocol {
     public static Serializer newSerializer() {
         return Serializer.builder()
                 .withTypes(
+                        PedidoID.class,
                         Msg.class,
                         MsgCommit.class,
                         LogEntry.class,

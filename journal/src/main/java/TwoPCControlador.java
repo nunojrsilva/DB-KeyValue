@@ -1,3 +1,4 @@
+
 import io.atomix.cluster.messaging.ManagedMessagingService;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
 import io.atomix.storage.journal.SegmentedJournal;
@@ -8,13 +9,14 @@ import io.atomix.utils.serializer.Serializer;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.stream.Collectors;
 
 class PedidoID{
-    public Address ad;
-    public int id;
+    public String ad;
+    public String id;
 
-    public PedidoID(Address a, int i){
-        ad = a;
+    public PedidoID(Address a, String i){
+        ad = a.toString();
         id = i;
     }
 
@@ -24,13 +26,19 @@ class PedidoID{
         }
 
         PedidoID pi = (PedidoID)o;
-        return ((id==pi.id) && (ad.equals(pi.ad)));
+        return ((id.equals(pi.id)) && (ad.equals(pi.ad)));
+    }
+
+    public String toString(){
+        return "{id: " + id +
+                ", address: " + ad +
+                "}";
     }
 
 }
 public class TwoPCControlador extends TwoPC{
 
-    private final int DELTA = 10;
+    private final int DELTA = 30;
     private ArrayList<Integer> paraCancelar = new ArrayList<>(); //ids com as proximas a serem canceladas
     private ArrayList<Boolean> possoCancelar = new ArrayList<>(); //valores bools que indicam se podemos ou não apagar
     private ArrayList<Integer> paraTerminar = new ArrayList<>(); //ids com as proximas a serem terminadas
@@ -45,27 +53,33 @@ public class TwoPCControlador extends TwoPC{
 
     //private Consumer<Msg> handlerMensagem;
 
-    private CompletableFuture<Void> enviaMensagem(Msg m, String assunto, Address a){
-        Participante part = participantes.get(a);
+    private void adicionaLock(Address a, Transaction t){
 
-        CompletableFuture<Void> meu = new CompletableFuture<Void>();
-
-        ArrayList<CompletableFuture<Void>> esperarFuturo = new ArrayList<>(part.espera);
-        CompletableFuture<Void>[] esperar = esperarFuturo.toArray(new CompletableFuture[esperarFuturo.size()]);
-        part.espera.add(meu);
-
-        return CompletableFuture.allOf(esperar).thenAccept(v -> {
-            try{
-                ms.sendAsync(a,assunto,s.encode(m)).thenAccept(msR -> {
-                    meu.complete(null);
-                });
+        for(Participante p: t.locksObtidos){
+            if(p.endereco.toString().equals(a.toString())){
+                System.out.println("Completo!");
+                p.espera.complete(true);
+                return;
             }
-            catch(Exception e){
-                System.out.println("Erro enviar mensagem: " + e); //podemos é por a remover
-                meu.complete(null); //quando estiver completo
-            }
-        });
+        }
     }
+    private CompletableFuture<Void> enviaMensagem(Msg m, String assunto, Address a){
+        System.out.println("Enviar " + assunto + " a: " + a);
+
+        System.out.println("Vou enviar!");
+
+        //return CompletableFuture.allOf(esperar).thenAccept(v -> {
+        try{
+            System.out.println("Vou mm tentar enviar");
+            return ms.sendAsync(a,assunto,s.encode(m));
+        }
+        catch(Exception e){
+            System.out.println("Erro enviar mensagem: " + e); //podemos é por a remover
+        }
+        return CompletableFuture.completedFuture(null);
+        //});
+    }
+
 
     private CompletableFuture<Void> enviaCommit(MsgCommit mc, List<Address> part, Transaction t){
 
@@ -85,14 +99,35 @@ public class TwoPCControlador extends TwoPC{
         return enviaMensagem(mc,"commit", ad);
     }
 
-    private CompletableFuture<Void> enviaPrepared(Msg m, List<Address> part){
-
-        for(Address ad: part){
+    private CompletableFuture<Void> enviaPrepared(Msg m, TreeSet<Participante> part){
+        Participante abaixo = null;
+        for(Participante p: part){
             try {
-                enviaMensagem(m,"prepared",ad);
+                if(abaixo == null){
+                    System.out.println("Enviar prepared com size 0");
+                    enviaMensagem(m,"prepared",p.endereco);
+                }
+                else{
+                    System.out.println("Enviar prepared a: " + p.endereco);
+                    System.out.println("Abaixo: " + abaixo.endereco);
+                    abaixo.espera.thenAccept(v -> {
+                        Transaction t = transacoes.get(m.id);
+
+                        if (t != null && t.resultado.equals("I")) {
+                            enviaMensagem(m, "prepared", p.endereco);
+                        } else {
+                            System.out.println("Outro resultado: ");
+                        }
+
+
+
+                    });
+                }
+
             }catch(Exception e) {
                 System.out.println(e);
             }
+            abaixo = p;
         }
         return CompletableFuture.completedFuture(null); //pode ser um allOf futuramente
     }
@@ -126,13 +161,12 @@ public class TwoPCControlador extends TwoPC{
             possoTerminar.add(false);
             System.out.println("Res: " + transacoes.get(idT).resultado);
             Msg paraMandarAux = new Msg(idT);
-            try {
-                enviaAbort(paraMandarAux,new ArrayList<>(transacoes.get(idT).participantes.keySet())).get();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            } catch (ExecutionException e) {
-                System.out.println(e.getMessage());
-            }
+            Transaction tAux = transacoes.get(idT);
+            for(Participante p: tAux.locksObtidos){
+                p.espera.complete(null);
+            } //depois podemos por um allOf antes do abort
+            enviaAbort(paraMandarAux,new ArrayList<>(transacoes.get(idT).participantes.keySet()));
+
 
             es.schedule(() -> {
                 cicloTerminar();
@@ -149,13 +183,8 @@ public class TwoPCControlador extends TwoPC{
                 Msg paraMandar = new Msg(t.xid);
                 paraCancelar.add(t.xid);
                 possoCancelar.add(true);
-                try {
-                    enviaPrepared(paraMandar,new ArrayList<>(t.participantes.keySet())).get();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                } catch (ExecutionException e) {
-                    System.out.println(e.getMessage());
-                }
+                enviaPrepared(paraMandar,t.locksObtidos);
+
 
                 //dar tempo para a resposta
                 es.schedule( ()-> {
@@ -172,13 +201,8 @@ public class TwoPCControlador extends TwoPC{
 
                     //mandar mensagem a todos a dizer commit
                     MsgCommit msgC = new MsgCommit(t.xid,null);
-                    try {
-                        enviaCommit(msgC,new ArrayList<>(t.participantes.keySet()),t).get();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    } catch (ExecutionException e) {
-                        System.out.println(e.getMessage());
-                    }
+                    enviaCommit(msgC,new ArrayList<>(t.participantes.keySet()),t);
+
 
                     es.schedule( ()-> {
                         cicloTerminar();
@@ -191,17 +215,17 @@ public class TwoPCControlador extends TwoPC{
                         Msg paraMandar = new Msg(t.xid);
                         paraTerminar.add(t.xid);
                         possoTerminar.add(false);
-                        try {
-                            enviaAbort(paraMandar,new ArrayList<>(t.participantes.keySet())).get();
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        } catch (ExecutionException e) {
-                            System.out.println(e.getMessage());
-                        }
+
+                        enviaAbort(paraMandar,new ArrayList<>(t.participantes.keySet()));
+
 
                         es.schedule( ()-> {
                             cicloTerminar();
                         }, DELTA, TimeUnit.SECONDS);
+
+                    }
+                    else{
+                        //é F, dar transacao como terminada
 
                     }
                 }
@@ -230,11 +254,16 @@ public class TwoPCControlador extends TwoPC{
                     part = participantesEnvolvidos(e.valores);
                 }
 
-                t = new Transaction(e.xid, e.data, part);
+                t = new Transaction(e.xid, e.data, part, e.pedido);
                 transacoes.put(e.xid, t);
+                pedidos.put(e.pedido,e.xid);
             }
             else{
                 //caso exista apenas altera o resultado
+                if(e.data.equals("F")){
+                    boolean resPed = t.resultado.equals("C");
+                    t.terminada.complete(resPed);
+                }
                 t.resultado = e.data;
             }
         }
@@ -303,6 +332,9 @@ public class TwoPCControlador extends TwoPC{
                 Msg nova = s.decode(m);
                 Transaction taux = transacoes.get(nova.id);
 
+                //temos depois de escrever no log o lock
+                adicionaLock(o,taux);
+
                 //pensar depois para o caso em que a transacao está terminada
                 System.out.println("Passei decode!");
                 if(!taux.resultado.equals("I")){
@@ -312,12 +344,12 @@ public class TwoPCControlador extends TwoPC{
                         //e o resultado n é F
                         if (taux.resultado.equals("A")) {
                             Msg paraMandar = new Msg(nova.id);
-                            enviaAbort(paraMandar, o).get();
+                            enviaAbort(paraMandar, o);
                         }
 
                         else{
                             MsgCommit paraMandar = new MsgCommit(nova.id,taux.participantes.get(o));
-                            enviaCommit(paraMandar,o).get();
+                            enviaCommit(paraMandar,o);
                         }
                     }
                 }
@@ -345,7 +377,7 @@ public class TwoPCControlador extends TwoPC{
 
                         //mandar mensagem a todos a dizer commit
                         MsgCommit msgC = new MsgCommit(nova.id, null);
-                        enviaCommit(msgC,new ArrayList<>(t.participantes.keySet()),t).get();
+                        enviaCommit(msgC,new ArrayList<>(t.participantes.keySet()),t);
 
                         System.out.println("Resultado depois: " + transacoes.get(nova.id).resultado);
 
@@ -371,13 +403,8 @@ public class TwoPCControlador extends TwoPC{
             if(transacoes.get(nova.id).resultado.equals("A")){
                 //já tem resultado, pelo que já mandou para todos e só mandamos para o que enviou
                 Msg paraMandar = new Msg(nova.id);
-                try {
-                    enviaAbort(paraMandar,a).get();
-                } catch (InterruptedException e1) {
-                    e1.printStackTrace();
-                } catch (ExecutionException e1) {
-                    System.out.println(e1.getMessage());
-                }
+                enviaAbort(paraMandar,a);
+
             }
             else {
                 if (transacoes.get(nova.id).resultado.equals("C") || transacoes.get(nova.id).resultado.equals("F")) {
@@ -399,13 +426,9 @@ public class TwoPCControlador extends TwoPC{
 
                     //mandar mensagem para todos os participantes daquela transacao
                     Msg paraMandar = new Msg(nova.id);
-                    try {
-                        enviaAbort(paraMandar, new ArrayList<>(transacoes.get(nova.id).participantes.keySet())).get();
-                    } catch (InterruptedException e1) {
-                        e1.printStackTrace();
-                    } catch (ExecutionException e1) {
-                        System.out.println(e1.getMessage());
-                    }
+
+                    enviaAbort(paraMandar, new ArrayList<>(transacoes.get(nova.id).participantes.keySet()));
+
 
                     es.schedule(() -> {
                         cicloTerminar();
@@ -417,6 +440,8 @@ public class TwoPCControlador extends TwoPC{
         }, es);
 
         ms.registerHandler("put",(a,m) -> {
+
+            System.out.println("Recebi put");
 
             PedidoPut pp = s.decode(m);
 
@@ -440,18 +465,22 @@ public class TwoPCControlador extends TwoPC{
             }
 
             System.out.println("Nao existe!");
-            HashMap<Long, byte[]> valores = new HashMap<>(pp.valores);
-            writerLog.append(new LogEntry(++xid, "I", valores));
-            pedidos.put(pi,xid);
+            try {
+                HashMap<Long, byte[]> valores = new HashMap<>(pp.valores);
+
+                writerLog.append(new LogEntry(++xid, "I", valores, pi));
+                pedidos.put(pi, xid);
+
+                System.out.println("Vou mandar!");
 
             //mandar mensagem para todos para iniciar transacao
             Msg paraMandar = new Msg(xid);
             HashMap<Address, HashMap<Long, byte[]>> participantes = participantesEnvolvidos(valores);
-            Transaction novaTransacao = new Transaction(xid, "I", participantes);
+            Transaction novaTransacao = new Transaction(xid, "I", participantes,pi);
             novaTransacao.terminada = new CompletableFuture<Boolean>();
             transacoes.put(xid, novaTransacao);
 
-            enviaPrepared(paraMandar, new ArrayList<>(participantes.keySet())); //depois aqui vai ter thenQQCoisa
+            enviaPrepared(paraMandar, novaTransacao.locksObtidos); //depois aqui vai ter thenQQCoisa
 
 
             paraCancelar.add(paraMandar.id); //adicionar este id ao array para cancelar a transacao com o id
@@ -476,79 +505,15 @@ public class TwoPCControlador extends TwoPC{
                     pp.finalizado = true;
                     System.out.println("Enviar a: " + a);
                     byte[] auxPut = s.encode(pp);
+
                     ms.sendAsync(a,"put",auxPut);
                     System.out.println("Enviei resposta!");
             });
+        }catch(Exception exc){
+                System.out.println("Exc: " + exc);
+        }
 
         },es);
-    }
-
-
-
-    public CompletableFuture<byte[]> funcaoPut(Address a, byte[] m){
-        CompletableFuture<byte[]> resultado = new CompletableFuture<>();
-        try {
-
-            PedidoPut pp = s.decode(m);
-
-
-            HashMap<Long, byte[]> valores = new HashMap<>(pp.valores);
-            writerLog.append(new LogEntry(++xid, "I", valores));
-
-            //mandar mensagem para todos para iniciar transacao
-            Msg paraMandar = new Msg(xid);
-            HashMap<Address, HashMap<Long, byte[]>> participantes = participantesEnvolvidos(valores);
-            Transaction novaTransacao = new Transaction(xid, "I", participantes);
-            novaTransacao.terminada = new CompletableFuture<Boolean>();
-            transacoes.put(xid, novaTransacao);
-
-            enviaPrepared(paraMandar, new ArrayList<>(participantes.keySet())); //depois aqui vai ter thenQQCoisa
-
-
-            paraCancelar.add(paraMandar.id); //adicionar este id ao array para cancelar a transacao com o id
-            possoCancelar.add(true); //para já podemos cancelar (até que alguem ponha resposta)
-
-            es.schedule(() -> {
-                try{
-                    System.out.println("Passou tempo");
-                    System.out.println("Esta terminado o tempo de: " + paraMandar.id);
-                }
-                catch(Exception exc){
-                    System.out.println(exc);
-                }
-                passouTempoTransacao();
-            }, DELTA, TimeUnit.SECONDS);
-
-            System.out.println("Vou terminar");
-            novaTransacao.terminada
-                    .thenApply(res -> {
-                        System.out.println("Terminada, posso mandar resultado!");
-                        pp.resultado = res;
-                        pp.finalizado = true;
-                        System.out.println("Enviar a: " + a);
-                        byte[] auxPut = null;
-                        try {
-                            auxPut = s.encode(res);
-                            System.out.println("RESPUT: " + auxPut + " corresponde a " + res);
-                            resultado.complete(auxPut);
-                            return auxPut;
-                        } catch (Exception exc) {
-                            System.out.println(exc);
-                        }
-                        return auxPut;
-
-                    });
-        }
-        catch(Exception e){
-            System.out.println(e);
-            resultado.complete(s.encode(false));
-        }
-        resultado.thenAccept(v -> {
-            System.out.println("Já estou completo, so um teste!!!" + s.decode(v));
-        });
-
-        return resultado; //ver isto depois
-
     }
 
     private void cicloTerminar(){
@@ -568,22 +533,12 @@ public class TwoPCControlador extends TwoPC{
 
             if(t.resultado.equals("A")){
                 Msg msg = new Msg(t.xid);
-                try {
-                    enviaAbort(msg,naoResponderam).get();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                } catch (ExecutionException e) {
-                    System.out.println(e.getMessage());
-                }
+                enviaAbort(msg,naoResponderam);
+
             }else{
                 MsgCommit msg = new MsgCommit(t.xid, null);
-                try {
-                    enviaCommit(msg,naoResponderam,t).get();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                } catch (ExecutionException e) {
-                    System.out.println(e.getMessage());
-                }
+                enviaCommit(msg,naoResponderam,t);
+
             }
 
             es.schedule( ()-> {
@@ -607,7 +562,7 @@ public class TwoPCControlador extends TwoPC{
         return participantes;
     }
 
-    public void iniciaTransacao(HashMap<Long,byte[]> valores){
+    /*public void iniciaTransacao(HashMap<Long,byte[]> valores){
         //depois tem de perguntar sempre se quer realizar transação
         xid++;
         //mandar mensagem para todos para iniciar transacao
@@ -633,5 +588,5 @@ public class TwoPCControlador extends TwoPC{
             passouTempoTransacao();
         }, DELTA, TimeUnit.SECONDS);
 
-    }
+    }*/
 }

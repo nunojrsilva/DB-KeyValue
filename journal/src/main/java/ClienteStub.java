@@ -6,33 +6,30 @@ import io.atomix.utils.serializer.Serializer;
 import java.lang.reflect.Array;
 import java.time.Duration;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.*;
 
 
 public class ClienteStub {
 
-   private HashMap<Address, Participante> coordenadores = new HashMap<>();
+   //private HashMap<Address, Participante> coordenadores = new HashMap<>();
    private ArrayList<Address> coordEnderecos = new ArrayList<>();
    private int coordAtual= 0;
    private int pedidoAtual = 0;
    private ManagedMessagingService ms;
    private Serializer s = DBKeyValueProtocol.newSerializer();
    private ScheduledExecutorService es = Executors.newSingleThreadScheduledExecutor();
-   private HashMap<Integer, Pedido> mapaPedidos = new HashMap<>();
-   private HashMap<Integer, CompletableFuture<Boolean>> resultadoPedidos = new HashMap<>();
-   private HashMap<Integer, CompletableFuture<Map<Long,byte[]>>> resultadoPedidosGet = new HashMap<>();
+   private HashMap<String, Pedido> mapaPedidos = new HashMap<>();
+   private HashMap<String, CompletableFuture<Boolean>> resultadoPedidos = new HashMap<>();
+   private HashMap<String, CompletableFuture<Map<Long,byte[]>>> resultadoPedidosGet = new HashMap<>();
 
-   public ClienteStub(ManagedMessagingService ms, int pa){
+   public ClienteStub(ManagedMessagingService ms){
         this.ms = ms;
-        pedidoAtual = pa;
-        Participante part = new Participante();
+        pedidoAtual = 0;
+        //Participante part = new Participante();
         Address partEnd = Address.from("localhost:23451");
-        part.endereco = partEnd;
-        coordenadores.put(partEnd,part);
+        //part.endereco = partEnd;
+        //coordenadores.put(partEnd,part);
         coordEnderecos.add(partEnd);
         //inicializar Serializer
         this.ms.registerHandler("put", (a,m)->{
@@ -55,32 +52,24 @@ public class ClienteStub {
    }
 
     private CompletableFuture<Void> enviaMensagem(byte[] m, String assunto, Address a){
+        System.out.println("Enviar " + assunto + " a: " + a);
 
-       Participante part = coordenadores.get(a);
+        System.out.println("Vou enviar!");
 
-        CompletableFuture<Void> meu = new CompletableFuture<Void>();
-
-        ArrayList<CompletableFuture<Void>> esperarFuturo = new ArrayList<>(part.espera);
-
-        CompletableFuture<Void>[] esperar = esperarFuturo.toArray(new CompletableFuture[esperarFuturo.size()]);
-
-        part.espera.add(meu);
-
-        return CompletableFuture.allOf(esperar).thenAccept(v -> {
+        //return CompletableFuture.allOf(esperar).thenAccept(v -> {
             try{
-                ms.sendAsync(a,assunto,m).thenAccept(msR -> {
-                    meu.complete(null);
-                });
+                System.out.println("Vou mm tentar enviar");
+                return ms.sendAsync(a,assunto,m);
             }
             catch(Exception e){
                 System.out.println("Erro enviar mensagem: " + e); //podemos é por a remover
-                meu.complete(null); //quando estiver completo
             }
-        });
+            return CompletableFuture.completedFuture(null);
+        //});
     }
 
 
-    public void verificaPedido(int i, Address ad){
+    public void verificaPedido(String i, Address ad){
         System.out.println("Verificar pedido!");
 
         Pedido p = mapaPedidos.get(i);
@@ -121,15 +110,16 @@ public class ClienteStub {
     public CompletableFuture<Boolean> put(Map<Long,byte[]> values) {
         //
         CompletableFuture<Boolean> res = new CompletableFuture<Boolean>();
-        PedidoPut pp = new PedidoPut(values, pedidoAtual++);
+        String idPedido = UUID.randomUUID().toString();
+        PedidoPut pp = new PedidoPut(values, idPedido);
         mapaPedidos.put(pp.id, pp);
         resultadoPedidos.put(pp.id, res);
 
-        enviaMensagem(s.encode(pp), "put", coordenadores.get(coordEnderecos.get(coordAtual)).endereco);
+        enviaMensagem(s.encode(pp), "put", coordEnderecos.get(coordAtual));
         //ms.sendAsync(coordenadores.get(coordEnderecos.get(coordAtual)).endereco,"put", s.encode(pp));
 
         es.schedule(() -> {
-            verificaPedido(pp.id, coordenadores.get(coordEnderecos.get(coordAtual)).endereco);
+            verificaPedido(pp.id, coordEnderecos.get(coordAtual));
         },8, TimeUnit.SECONDS);
 
         coordAtual = (coordAtual + 1) % coordEnderecos.size();
@@ -140,17 +130,17 @@ public class ClienteStub {
        //depois implementamos estes!
 
         CompletableFuture<Map <Long, byte[]>> res = new CompletableFuture<>();
-
-        PedidoGet pg = new PedidoGet(keys, pedidoAtual++);
+        String idPedido = UUID.randomUUID().toString();
+        PedidoGet pg = new PedidoGet(keys, idPedido);
 
         mapaPedidos.put(pg.id, pg);
 
         resultadoPedidosGet.put(pg.id, res);
 
-        enviaMensagem(s.encode(pg), "get", coordenadores.get(coordEnderecos.get(coordAtual)).endereco);
+        enviaMensagem(s.encode(pg), "get", coordEnderecos.get(coordAtual));
 
         es.schedule(() -> {
-            verificaPedido(pg.id, coordenadores.get(coordEnderecos.get(coordAtual)).endereco);
+            verificaPedido(pg.id, coordEnderecos.get(coordAtual));
         },8, TimeUnit.SECONDS);
 
         coordAtual = (coordAtual + 1) % coordEnderecos.size();

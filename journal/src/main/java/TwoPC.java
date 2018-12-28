@@ -11,9 +11,15 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
-class Participante{
+class Participante implements Comparable{
     public Address endereco;
-    public ArrayList<CompletableFuture<Void>> espera = new ArrayList<>();
+    public CompletableFuture<Boolean> espera = new CompletableFuture<>();
+
+    public int compareTo(Object o){
+        Participante p = (Participante)o;
+
+        return this.endereco.toString().compareTo(p.endereco.toString());
+    }
 }
 
 public class TwoPC {

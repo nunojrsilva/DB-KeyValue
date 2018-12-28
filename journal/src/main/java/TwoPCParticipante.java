@@ -15,10 +15,13 @@ import java.util.concurrent.Executors;
 class Lock{
     Address coordenador;
     int xid;
+    int lockID;
+    CompletableFuture<Void> obtido = new CompletableFuture<>();
 
-    public Lock(Address coordenador, int xid) {
+    public Lock(Address coordenador, int xid, int id) {
         this.coordenador = coordenador;
         this.xid = xid;
+        lockID = id;
     }
 }
 
@@ -36,36 +39,53 @@ class TwoPCParticipante extends TwoPC{
      * Uma lista de possiveis locks, já com uma ordem associada
      */
     private Lock lockAtual = null;
+    private int lockID = 0;
     private TreeSet<Lock> filaLock = new TreeSet<Lock>((o1, o2) -> {
 
         Lock lock1 = (Lock) o1;
         Lock lock2 = (Lock) o2;
 
-        return lock1.coordenador.toString().compareTo(lock2.coordenador.toString());
+        if(lock1.lockID > lock2.lockID){
+            return 1;
+        }
+        if(lock1.lockID < lock2.lockID){
+            return -1;
+        }
+        return 0;
+
+        //return lock1.coordenador.toString().compareTo(lock2.coordenador.toString());
     });
+
+    private CompletableFuture<Void> enviaMensagem(Msg m, String assunto, Address a){
+        System.out.println("Enviar " + assunto + " a: " + a);
+
+        System.out.println("Vou enviar!");
+
+        //return CompletableFuture.allOf(esperar).thenAccept(v -> {
+        try{
+            System.out.println("Vou mm tentar enviar");
+            return ms.sendAsync(a,assunto,s.encode(m));
+        }
+        catch(Exception e){
+            System.out.println("Erro enviar mensagem: " + e); //podemos é por a remover
+        }
+        return CompletableFuture.completedFuture(null);
+        //});
+    }
 
     private CompletableFuture<Void> enviaOk(Msg m, Address coord) {
 
-        return ms.sendAsync(coord, "ok", s.encode(m))
-            .thenCompose(aux -> {
-                return CompletableFuture.completedFuture(null);
-        });
+        return enviaMensagem(m,"ok",coord);
     }
 
     private CompletableFuture<Void> enviaPrepared(Msg m, Address coord){
 
-        return ms.sendAsync(coord, "prepared", s.encode(m))
-            .thenCompose(aux -> {
-                return CompletableFuture.completedFuture(null);
-        });
+        return enviaMensagem(m,"prepared",coord);
     }
 
     private CompletableFuture<Void> enviaAbort(Msg m, Address coord){
 
-        return ms.sendAsync(coord, "abort", s.encode(m))
-            .thenCompose(aux -> {
-                return CompletableFuture.completedFuture(null);
-        });
+        return enviaMensagem(m,"abort",coord);
     }
 
     private void libertaLock(){
@@ -183,6 +203,7 @@ class TwoPCParticipante extends TwoPC{
              * Vou verificar primeiro se já recebi uma resposta para este notificação, se sim tenho de dar a mesma
              */
             if(transacoes.containsKey(nova.id)){
+                System.out.println("Ja tenho esta transacao!Decidir o que fazer com o lock!");
                 Msg paraMandar = new Msg(nova.id);
 
                 //Para já vou deixar end[0], mas depois o coordenador poderá ser outro ...
@@ -211,47 +232,33 @@ class TwoPCParticipante extends TwoPC{
             }
 
 
+
             String assunto = "prepared";
-            int res = 1;
 
-            if(res == 0){
-                assunto = "abort";
-                /**
-                 * Vou guardar os valores no Log, caso haja um abort!
-                 */
-                writerLog.append(new LogEntry(nova.id,"A", null));
-                Transaction t = new Transaction(nova.id, "A");
-                transacoes.put(nova.id, t);
-                Msg paraMandar = new Msg(nova.id);
-                enviaAbort(paraMandar,end[0]);
+            /**
+             * Vou guardar a minha decisão no Log "P" <- Estou pronto para iniciar
+             * Vou criar uma nova entrada na transacao
+             */
+            writerLog.append(new LogEntry(nova.id,"P", null));
+            Transaction t = new Transaction(nova.id, "P");
+            transacoes.put(nova.id, t);
+            Msg paraMandar = new Msg(nova.id);
 
+            //Só depois de enviar o prepared é que eu vou fazer o lock, ou fazemos antes? Antes
+            Lock meuLock = new Lock(a,nova.id,lockID++);
+            filaLock.add(meuLock);
+
+            if(lockAtual == null) {
+                System.out.println("Lock atual é null!");
+                //NECESSARIO GUARDAR NO LOG?
+                lockAtual = filaLock.pollFirst();
+                lockAtual.obtido.complete(null);
             }
-            else{
-                /**
-                 * Vou guardar a minha decisão no Log "P" <- Estou pronto para iniciar
-                 * Vou criar uma nova entrada na transacao
-                 */
-                writerLog.append(new LogEntry(nova.id,"P", null));
-                Transaction t = new Transaction(nova.id, "P");
-                transacoes.put(nova.id, t);
-                Msg paraMandar = new Msg(nova.id);
 
-                //Só depois de enviar o prepared é que eu vou fazer o lock, ou fazemos antes?
-                if(lockAtual == null) {
-                    //NECESSARIO GUARDAR NO LOG?
-                    if(filaLock.size() == 0)
-                        //PRECISO POR AQUI A ADDRESS DO COORDENADOR, ONDE VEM? Msg? Para ja é o end[0]
-                        lockAtual = new Lock(end[0], nova.id);
-                    else
-                        lockAtual = filaLock.pollFirst();
-                }else{
-                    //Quer dizer que alguem já tem o lock, por isso vou adicioná-lo à fila de espera
-                    Lock espera = new Lock(end[0], nova.id);
-                    filaLock.add(espera);
-                }
-
+            meuLock.obtido.thenAccept(v -> {
+                System.out.println("Posso enviar!");
                 enviaPrepared(paraMandar, end[0]);
-            }
+            });
 
             /**
              * Vou agora mandar a resposta para o coordenador
@@ -266,6 +273,10 @@ class TwoPCParticipante extends TwoPC{
         ms.registerHandler("abort", (a,m)-> {
             System.out.println("Recebi abort!");
             Msg nova = s.decode(m);
+
+            System.out.println("SIZE da fila: " + filaLock.size());
+            filaLock.removeIf(l -> (l.coordenador.toString().equals(a.toString())) && (l.xid == nova.id));
+            System.out.println("SIZE da fila depois: " + filaLock.size());
 
             if(transacoes.containsKey(nova.id) == false){
                 System.out.println("Não foi possivel abortar a transacao ..." + nova.id);
@@ -289,7 +300,10 @@ class TwoPCParticipante extends TwoPC{
 
             System.out.println("Vou enviar ok no abort!");
             //LIBERTAR LOCK
-            libertaLock();
+            if((lockAtual != null) && (lockAtual.xid == nova.id) && lockAtual.coordenador.toString().equals(a.toString())) {
+                System.out.println("Sou eu que tenho o lock!");
+                libertaLock();
+            }
             enviaOk(paraMandar,end[0]);
 
 
