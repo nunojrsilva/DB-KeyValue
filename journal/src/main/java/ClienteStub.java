@@ -22,8 +22,9 @@ public class ClienteStub {
    private ManagedMessagingService ms;
    private Serializer s = DBKeyValueProtocol.newSerializer();
    private ScheduledExecutorService es = Executors.newSingleThreadScheduledExecutor();
-   private HashMap<Integer,Pedido> mapaPedidos = new HashMap<>();
-   private HashMap<Integer,CompletableFuture<Boolean>> resultadoPedidos = new HashMap<>();
+   private HashMap<Integer, Pedido> mapaPedidos = new HashMap<>();
+   private HashMap<Integer, CompletableFuture<Boolean>> resultadoPedidos = new HashMap<>();
+   private HashMap<Integer, CompletableFuture<Map<Long,byte[]>>> resultadoPedidosGet = new HashMap<>();
 
    public ClienteStub(ManagedMessagingService ms, int pa){
         this.ms = ms;
@@ -35,22 +36,34 @@ public class ClienteStub {
         coordEnderecos.add(partEnd);
         //inicializar Serializer
         this.ms.registerHandler("put", (a,m)->{
-           System.out.println("Está completo!");
+           System.out.println("Está completo o pedido put!");
            PedidoPut rpp = s.decode(m);
            System.out.println(rpp.id);
            rpp.finalizado = true;
            mapaPedidos.put(rpp.id,rpp);
            resultadoPedidos.get(rpp.id).complete(rpp.resultado);
        },es);
+
+       this.ms.registerHandler("get", (a,m)->{
+           System.out.println("Está completo o pedido Get!");
+           PedidoGet rpg = s.decode(m);
+           System.out.println(rpg.id);
+           rpg.finalizado = true;
+           mapaPedidos.put(rpg.id,rpg);
+           resultadoPedidosGet.get(rpg.id).complete(rpg.resultado);
+       },es);
    }
 
     private CompletableFuture<Void> enviaMensagem(byte[] m, String assunto, Address a){
-        Participante part = coordenadores.get(a);
+
+       Participante part = coordenadores.get(a);
 
         CompletableFuture<Void> meu = new CompletableFuture<Void>();
 
         ArrayList<CompletableFuture<Void>> esperarFuturo = new ArrayList<>(part.espera);
+
         CompletableFuture<Void>[] esperar = esperarFuturo.toArray(new CompletableFuture[esperarFuturo.size()]);
+
         part.espera.add(meu);
 
         return CompletableFuture.allOf(esperar).thenAccept(v -> {
@@ -86,8 +99,22 @@ public class ClienteStub {
                 },8, TimeUnit.SECONDS);
             }
         }
-        else{
+        else {
             //o mesmo para o get
+            PedidoGet pg = (PedidoGet) p;
+
+            if (pg.finalizado) {
+                resultadoPedidosGet.get(i).complete(pg.resultado);
+            }
+            else {
+                enviaMensagem(s.encode(pg), "put", ad);
+
+                //reenviar mensagem
+                es.schedule(() -> {
+                    verificaPedido(pg.id, ad);
+                },8, TimeUnit.SECONDS);
+
+            }
         }
    }
 
@@ -109,9 +136,26 @@ public class ClienteStub {
         return res;
     }
 
-    public CompletableFuture<Map<Long,byte[]>> get(Collection<Long> keys){
+    public CompletableFuture<Map<Long,byte[]>> get (Collection<Long> keys){
        //depois implementamos estes!
-        return CompletableFuture.completedFuture(null);
+
+        CompletableFuture<Map <Long, byte[]>> res = new CompletableFuture<>();
+
+        PedidoGet pg = new PedidoGet(keys, pedidoAtual++);
+
+        mapaPedidos.put(pg.id, pg);
+
+        resultadoPedidosGet.put(pg.id, res);
+
+        enviaMensagem(s.encode(pg), "get", coordenadores.get(coordEnderecos.get(coordAtual)).endereco);
+
+        es.schedule(() -> {
+            verificaPedido(pg.id, coordenadores.get(coordEnderecos.get(coordAtual)).endereco);
+        },8, TimeUnit.SECONDS);
+
+        coordAtual = (coordAtual + 1) % coordEnderecos.size();
+        return res;
+
     }
 
 }
