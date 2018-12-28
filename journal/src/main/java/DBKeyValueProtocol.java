@@ -68,9 +68,17 @@ class PedidoGet implements Pedido{
     public HashMap<Long,byte[]> resultado;
     public int id;
 
+    public PedidoGet ( Collection <Long> keys, int id) {
+        this.keys = keys;
+        this.id = id;
+
+    }
+
     public boolean finalizado(){
+
         return finalizado;
     }
+
     public void finaliza(Object res){
         finalizado = true;
         resultado = (HashMap<Long,byte[]>)res;
