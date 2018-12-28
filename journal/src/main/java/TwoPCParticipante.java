@@ -6,13 +6,21 @@ import io.atomix.storage.journal.SegmentedJournalWriter;
 import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+class Lock{
+    Address coordenador;
+    int xid;
+
+    public Lock(Address coordenador, int xid) {
+        this.coordenador = coordenador;
+        this.xid = xid;
+    }
+}
 
 class TwoPCParticipante extends TwoPC{
 
@@ -22,7 +30,19 @@ class TwoPCParticipante extends TwoPC{
      * @valores Para guadar os pares chave-valor
      */
     private HashMap<Long, byte[]> valores = new HashMap<>();
+    /**
+     * Para o 2PL:
+     * Uma variável que diz quem tem o lock atual
+     * Uma lista de possiveis locks, já com uma ordem associada
+     */
+    private Lock lockAtual = null;
+    private TreeSet<Lock> filaLock = new TreeSet<Lock>((o1, o2) -> {
 
+        Lock lock1 = (Lock) o1;
+        Lock lock2 = (Lock) o2;
+
+        return lock1.coordenador.toString().compareTo(lock2.coordenador.toString());
+    });
 
     private CompletableFuture<Void> enviaOk(Msg m, Address coord) {
 
@@ -48,6 +68,17 @@ class TwoPCParticipante extends TwoPC{
         });
     }
 
+    private void libertaLock(){
+        /**
+         * Vou agora libertar o lock
+         */
+        lockAtual = filaLock.pollFirst();
+        System.out.println("Lock libertado!");
+        if(lockAtual != null){
+            System.out.println("Ja libertei o lock e vou avisar o seguinte!");
+            enviaPrepared(new Msg(lockAtual.xid), lockAtual.coordenador);
+        }
+    }
 
     /**
      * ATENCAO!!!
@@ -192,7 +223,6 @@ class TwoPCParticipante extends TwoPC{
                 Transaction t = new Transaction(nova.id, "A");
                 transacoes.put(nova.id, t);
                 Msg paraMandar = new Msg(nova.id);
-
                 enviaAbort(paraMandar,end[0]);
 
             }
@@ -205,8 +235,22 @@ class TwoPCParticipante extends TwoPC{
                 Transaction t = new Transaction(nova.id, "P");
                 transacoes.put(nova.id, t);
                 Msg paraMandar = new Msg(nova.id);
-                enviaPrepared(paraMandar,end[0]);
 
+                //Só depois de enviar o prepared é que eu vou fazer o lock, ou fazemos antes?
+                if(lockAtual == null) {
+                    //NECESSARIO GUARDAR NO LOG?
+                    if(filaLock.size() == 0)
+                        //PRECISO POR AQUI A ADDRESS DO COORDENADOR, ONDE VEM? Msg? Para ja é o end[0]
+                        lockAtual = new Lock(end[0], nova.id);
+                    else
+                        lockAtual = filaLock.pollFirst();
+                }else{
+                    //Quer dizer que alguem já tem o lock, por isso vou adicioná-lo à fila de espera
+                    Lock espera = new Lock(end[0], nova.id);
+                    filaLock.add(espera);
+                }
+
+                enviaPrepared(paraMandar, end[0]);
             }
 
             /**
@@ -242,14 +286,12 @@ class TwoPCParticipante extends TwoPC{
             }
 
             Msg paraMandar = new Msg(nova.id);
-            try {
-                System.out.println("Vou enviar ok no abort!");
-                enviaOk(paraMandar,end[0]).get();
-            } catch (InterruptedException e1) {
-                e1.printStackTrace();
-            } catch (ExecutionException e1) {
-                e1.printStackTrace();
-            }
+
+            System.out.println("Vou enviar ok no abort!");
+            //LIBERTAR LOCK
+            libertaLock();
+            enviaOk(paraMandar,end[0]);
+
 
         }, es);
 
@@ -292,14 +334,11 @@ class TwoPCParticipante extends TwoPC{
             }
 
             Msg paraMandar = new Msg(nova.id);
-            try {
-                System.out.println("Vou enviar ok no commit");
-                enviaOk(paraMandar,end[0]).get();
-            } catch (InterruptedException e1) {
-                e1.printStackTrace();
-            } catch (ExecutionException e1) {
-                e1.printStackTrace();
-            }
+            System.out.println("Vou enviar ok no commit");
+            //LIBERTAR LOCK
+            libertaLock();
+            enviaOk(paraMandar,end[0]);
+
 
         }, es);
     }
