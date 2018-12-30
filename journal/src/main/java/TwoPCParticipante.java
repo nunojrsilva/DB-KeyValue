@@ -117,38 +117,32 @@ class TwoPCParticipante extends TwoPC{
      * Para nao dar confusao, eu mudei o nome de transacoes para transacoesANTIGA na variavel! Esta a cima em comentarios
      */
     private void analisaTransacaoParticipante() {
-
+        boolean primeiroLock = true;
         //Resultados possiveis :
         for (Transaction t : transacoes.values()) {
             Msg paraMandar = new Msg(t.xid);
             switch (t.resultado) {
                 case ("P"):
-                    try {
-                        enviaPrepared(paraMandar,end[0]).get();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    } catch (ExecutionException e) {
-                        e.printStackTrace();
+                    Lock l = new Lock(end[0], t.xid, lockID++);
+
+                    if(primeiroLock){
+                        primeiroLock=false;
+                        lockAtual = l;
                     }
+                    filaLock.add(l);
+
+                    l.obtido.thenAccept(v -> {
+                        System.out.println("Posso enviar!");
+                        enviaPrepared(paraMandar, end[0]);
+                    });
                     break;
                 case ("A"):
-                    try {
-                        enviaAbort(paraMandar,end[0]).get();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    } catch (ExecutionException e) {
-                        e.printStackTrace();
-                    }
+                    //PRECISO POR AQUI UM lockID++?????????
+                    enviaAbort(paraMandar,end[0]);
                     break;
 
                 case ("C"):
-                    try {
-                        enviaOk(paraMandar,end[0]).get();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    } catch (ExecutionException e) {
-                        e.printStackTrace();
-                    }
+                    enviaOk(paraMandar,end[0]);
                     break;
             }
         }
