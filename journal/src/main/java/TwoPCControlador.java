@@ -85,13 +85,36 @@ public class TwoPCControlador extends TwoPC{
 
     private CompletableFuture<Void> enviaCommit(MsgCommit mc, List<Address> part, Transaction t){
 
-        for(Address ad: part){
+        Participante abaixo = null;
+        for(Participante p: t.locksObtidos){
             try {
-                mc.valores = t.participantes.get(ad);
-                enviaMensagem(mc,"commit",ad);
+                if(abaixo == null){
+                    System.out.println("Enviar commit com size 0");
+                    mc.valores = t.participantes.get(p.endereco);
+                    enviaMensagem(mc,"commit",p.endereco);
+                }
+                else{
+                    System.out.println("Enviar commit a: " + p.endereco);
+                    System.out.println("Abaixo no commit: " + abaixo.endereco);
+                    abaixo.espera.thenAccept(v -> {
+                        Transaction taux = transacoes.get(mc.id);
+
+                        if (taux != null && taux.resultado.equals("C")) {
+                            mc.valores = t.participantes.get(p.endereco);
+                            enviaMensagem(mc,"commit",p.endereco);
+                        } else {
+                            System.out.println("Outro resultado no commit: ");
+                        }
+
+
+
+                    });
+                }
+
             }catch(Exception e) {
                 System.out.println(e);
             }
+            abaixo = p;
         }
         return CompletableFuture.completedFuture(null); //pode ser um allOf futuramente
     }
@@ -161,7 +184,8 @@ public class TwoPCControlador extends TwoPC{
             return;
         }
 
-        if(transaction.resultado.equals("P")) {
+        if(transaction.resultado.equals("I")) {
+            System.out.println("Vou abortar a transação: " + idT);
             //posso cancelar se o resultado ainda for P
             writerLog.append(new LogEntry(idT,"A",null));
             transaction.resultado = "A";
@@ -169,7 +193,7 @@ public class TwoPCControlador extends TwoPC{
             Msg paraMandarAux = new Msg(idT);
             //completar todos os locks (pois a resposta será abort)
             for(Participante p: transaction.locksObtidos){
-                p.espera.complete(null);
+                p.espera.complete(true);
             } //depois podemos por um allOf antes do abort
             enviaAbort(paraMandarAux,new ArrayList<>(transaction.participantes.keySet()));
 

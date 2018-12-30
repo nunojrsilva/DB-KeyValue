@@ -33,16 +33,16 @@ public class ClienteStub {
         coordEnderecos.add(partEnd);
         //inicializar Serializer
         this.ms.registerHandler("put", (a,m)->{
-           System.out.println("Está completo o pedido put!");
+           //System.out.println("Está completo o pedido put!");
            PedidoPut rpp = s.decode(m);
-           System.out.println(rpp.id);
+           //System.out.println(rpp.id);
            rpp.finalizado = true;
            mapaPedidos.put(rpp.id,rpp);
            resultadoPedidos.get(rpp.id).complete(rpp.resultado);
        },es);
 
        this.ms.registerHandler("get", (a,m)->{
-           System.out.println("Está completo o pedido Get!");
+           //System.out.println("Está completo o pedido Get!");
            PedidoGet rpg = s.decode(m);
            System.out.println(rpg.id);
            rpg.finalizado = true;
