@@ -32,8 +32,7 @@ class Lock{
         Lock al = (Lock)o;
 
         return (this.xid == al.xid) &&
-                (this.coordenador.equals(al.coordenador) &&
-                (this.lockID == al.lockID));
+                (this.coordenador.equals(al.coordenador));
     }
 }
 

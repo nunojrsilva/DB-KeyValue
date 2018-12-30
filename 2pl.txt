@@ -31,3 +31,42 @@ convem garantir que sabemos sempre quem respondeu ao prepared
 Depois pensar nas retransmissoes e nas escritas e leituras do log
 
 (para ja aquilo é só em casos no qual n vao abaixo)
+
+
+-------------------PARTICIPANTE-----------------------
+
+ao receber prepared:
+
+    *verifica se lock atual é null e caso seja responde e adquire lock
+
+    *caso n seja, ve se é o mesmo e caso seja o mesmo responde
+
+    *caso n seja o mesmo adiciona à fila
+
+ao receber abort:
+
+    *ve se atual é dele (ou se existe sequer) e caso seja (ou n exista) responde
+    verifica ainda se existe um proximo lock
+
+    *caso contrario responde e retira o lock da queue
+
+ao receber commit:
+
+    *verifica se o lock é dele e caso seja responde e liberta-o
+
+    *caso nao seja, verifica se ja tem resposta para essa transacao e caso tenha responde
+    (nao altera nada pois já foi feito)
+
+    *caso nao tenha o lock e nao tenha resposta é preciso decidir o que fazer
+    caso o lock seja null tbm é preciso decidir 
+    mas estes casos parece-me q n acontecem, mas pensar melhor
+
+
+    O participante ao recuperar o log tem de recuperar a queue e o lock atual consoante os valores que tem
+    no log para as transacoes. A primeira a aparecer um P é o atual e depois adiciona-se à fila.
+    Sempre que verifica um A ou C "liberta" o lock(muda apenas o atual para o primeiro presenta na fila, 
+    se este existir)
+
+
+    -------------COORDENADOR----------------
+    Pensar melhor
