@@ -23,6 +23,18 @@ class Lock{
         this.xid = xid;
         lockID = id;
     }
+
+    public boolean equals(Object o){
+        if(o == null || !(o instanceof Lock)){
+            return false;
+        }
+
+        Lock al = (Lock)o;
+
+        return (this.xid == al.xid) &&
+                (this.coordenador.equals(al.coordenador) &&
+                (this.lockID == al.lockID));
+    }
 }
 
 class TwoPCParticipante extends TwoPC{
