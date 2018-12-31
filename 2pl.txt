@@ -50,7 +50,10 @@ ao receber abort:
 
     *caso contrario responde e retira o lock da queue
 
-ao receber commit:
+
+--------------VER A PARTIR DAQUI---------------
+ao receber commit: basta ver se já tem resultado e se já tiver então só responde
+parece-me q se ele receber um commit é pq é o lock do gajo!
 
     *verifica se o lock é dele e caso seja responde e liberta-o
 

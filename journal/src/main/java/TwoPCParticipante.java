@@ -181,8 +181,21 @@ class TwoPCParticipante extends TwoPC{
 
             }
 
-        }
+            if(e.data.equals("P")){
+                Lock aux = new Lock(end[0],t.xid,lockID++);
+                filaLock.add(aux);
+            }
+            else{
+                System.out.println("Antes de remover: " + filaLock.size());
+                filaLock.removeIf(lock -> (lock.xid == e.xid) && lock.coordenador.equals(end[0]));
+                System.out.println("Depois de remover: " + filaLock.size());
+            }
 
+        }
+        lockAtual = filaLock.pollFirst();
+        if(lockAtual != null) {
+            System.out.println("Lock atual: " + lockAtual.coordenador + ", " + lockAtual.xid);
+        }
         analisaTransacaoParticipante();
 
     }
@@ -207,30 +220,16 @@ class TwoPCParticipante extends TwoPC{
             /**
              * Vou verificar primeiro se já recebi uma resposta para este notificação, se sim tenho de dar a mesma
              */
-            if(transacoes.containsKey(nova.id)){
+            if(transacoes.containsKey(nova.id) &&
+                    !transacoes.get(nova.id).resultado.equals("P")){
                 System.out.println("Ja tenho esta transacao!Decidir o que fazer com o lock!");
                 Msg paraMandar = new Msg(nova.id);
 
                 //Para já vou deixar end[0], mas depois o coordenador poderá ser outro ...
                 String resultado = transacoes.get(nova.id).resultado;
                 switch (resultado){
-                    case "P":
-                        try {
-                            enviaPrepared(paraMandar,end[0]).get();
-                        } catch (InterruptedException e1) {
-                            e1.printStackTrace();
-                        } catch (ExecutionException e1) {
-                            e1.printStackTrace();
-                        }
-                        break;
                     case "A":
-                        try {
-                            enviaAbort(paraMandar,end[0]).get();
-                        } catch (InterruptedException e1) {
-                            e1.printStackTrace();
-                        } catch (ExecutionException e1) {
-                            e1.printStackTrace();
-                        }
+                        enviaAbort(paraMandar,end[0]);
                         break;
                 }
                 return;
@@ -244,27 +243,43 @@ class TwoPCParticipante extends TwoPC{
              * Vou guardar a minha decisão no Log "P" <- Estou pronto para iniciar
              * Vou criar uma nova entrada na transacao
              */
-            writerLog.append(new LogEntry(nova.id,"P", null));
-            Transaction t = new Transaction(nova.id, "P");
-            transacoes.put(nova.id, t);
-            Msg paraMandar = new Msg(nova.id);
+            if(!transacoes.containsKey(nova.id)){
+                writerLog.append(new LogEntry(nova.id, "P", null));
 
-            //Só depois de enviar o prepared é que eu vou fazer o lock, ou fazemos antes? Antes
+                Transaction t = new Transaction(nova.id, "P");
+                transacoes.put(nova.id, t);
+            }
+
             Lock meuLock = new Lock(a,nova.id,lockID++);
-            filaLock.add(meuLock);
 
-            if(lockAtual == null) {
+            if(lockAtual == null){
+                //posso mandar e adquiro lock
                 System.out.println("Lock atual é null!");
                 //NECESSARIO GUARDAR NO LOG?
-                lockAtual = filaLock.pollFirst();
+                lockAtual = meuLock;
                 lockAtual.obtido.complete(null);
+
+            }
+
+            else{
+                if(lockAtual.equals(meuLock)){
+                    //posso mandar
+                    lockAtual.obtido.complete(null);
+                }
+
+                else{
+                    //senao adiciono à fila
+                    filaLock.add(meuLock);
+                }
             }
 
             meuLock.obtido.thenAccept(v -> {
+                //aqui podemos ver se ja n tem resposta sendo A
+                Msg paraMandar = new Msg(nova.id);
+                //Só depois de enviar o prepared é que eu vou fazer o lock, ou fazemos antes? Antes
                 System.out.println("Posso enviar!");
                 enviaPrepared(paraMandar, end[0]);
             });
-
             /**
              * Vou agora mandar a resposta para o coordenador
              * ----> Não usei a mesma mensagem, porque posteriormente pode nos dar mais jeito para trabalhar com os varios coordenadores
@@ -326,6 +341,7 @@ class TwoPCParticipante extends TwoPC{
                  * Primeiro verifico se já não guardei a
                  */
                 if(transacoes.get(nova.id).resultado.equals("C")){
+                    //se ja tem resposta, responde e n faz nada
                     System.out.println("Já tinha os valores referentes à transacao " + nova.id);
                 }else {
                     /**
@@ -349,13 +365,14 @@ class TwoPCParticipante extends TwoPC{
                     Transaction t = transacoes.get(nova.id);
                     t.resultado = "C";
                     transacoes.put(nova.id, t);
+                    libertaLock();
                 }
             }
 
             Msg paraMandar = new Msg(nova.id);
             System.out.println("Vou enviar ok no commit");
             //LIBERTAR LOCK
-            libertaLock();
+
             enviaOk(paraMandar,end[0]);
 
 
