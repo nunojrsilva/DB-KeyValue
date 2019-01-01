@@ -7,9 +7,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 class Msg {
-    int id;
+    TransactionID id;
 
-    public Msg(int id) {
+    public Msg(TransactionID id) {
         this.id = id;
     }
 }
@@ -18,7 +18,7 @@ class Msg {
 class MsgCommit extends Msg {
     HashMap<Long,byte[]> valores;
 
-    public MsgCommit(int id, HashMap<Long, byte[]> valores) {
+    public MsgCommit(TransactionID id, HashMap<Long, byte[]> valores) {
         super(id);
         this.valores = valores;
     }
@@ -26,19 +26,19 @@ class MsgCommit extends Msg {
 
 
 class LogEntry {
-    public int xid;
+    public TransactionID xid;
     public String data;
     public HashMap<Long,byte[]> valores;
     public PedidoID pedido;
 
     public LogEntry() {}
-    public LogEntry(int xid, String data, HashMap<Long, byte[]> valores) {
+    public LogEntry(TransactionID xid, String data, HashMap<Long, byte[]> valores) {
         this.xid=xid;
         this.data=data;
         this.valores = valores;
     }
 
-    public LogEntry(int xid, String data, HashMap<Long, byte[]> valores, PedidoID p) {
+    public LogEntry(TransactionID xid, String data, HashMap<Long, byte[]> valores, PedidoID p) {
         this.xid=xid;
         this.data=data;
         this.valores = valores;
@@ -122,6 +122,7 @@ public class DBKeyValueProtocol {
     public static Serializer newSerializer() {
         return Serializer.builder()
                 .withTypes(
+                        TransactionID.class,
                         PedidoID.class,
                         Msg.class,
                         MsgCommit.class,

@@ -48,8 +48,8 @@ public class TwoPCControlador extends TwoPC{
     //private HashMap<Integer, ArrayList<LogEntry>> transacoesLog = new HashMap<>(); //para guardar as transacoes
     // dos logs
 
-    private HashMap<Integer, Transaction> transacoes = new HashMap<>();
-    private HashMap<PedidoID,Integer> pedidos = new HashMap<>();
+    private HashMap<TransactionID, Transaction> transacoes = new HashMap<>();
+    private HashMap<PedidoID,TransactionID> pedidos = new HashMap<>();
     private int xid;
 
     //private Consumer<Msg> handlerMensagem;
@@ -91,7 +91,7 @@ public class TwoPCControlador extends TwoPC{
                 if(abaixo == null){
                     System.out.println("Enviar commit com size 0");
                     mc.valores = t.participantes.get(p.endereco);
-                    enviaMensagem(mc,"commit",p.endereco);
+                    enviaMensagem(mc,"commitCoordenador",p.endereco);
                 }
                 else{
                     System.out.println("Enviar commit a: " + p.endereco);
@@ -101,7 +101,7 @@ public class TwoPCControlador extends TwoPC{
 
                         if (taux != null && taux.resultado.equals("C")) {
                             mc.valores = t.participantes.get(p.endereco);
-                            enviaMensagem(mc,"commit",p.endereco);
+                            enviaMensagem(mc,"commitCoordenador",p.endereco);
                         } else {
                             System.out.println("Outro resultado no commit: ");
                         }
@@ -121,7 +121,7 @@ public class TwoPCControlador extends TwoPC{
 
     private CompletableFuture<Void> enviaCommit(MsgCommit mc,Address ad) {
 
-        return enviaMensagem(mc,"commit", ad);
+        return enviaMensagem(mc,"commitCoordenador", ad);
     }
 
     private CompletableFuture<Void> enviaPrepared(Msg m, TreeSet<Participante> part){
@@ -130,7 +130,7 @@ public class TwoPCControlador extends TwoPC{
             try {
                 if(abaixo == null){
                     System.out.println("Enviar prepared com size 0");
-                    enviaMensagem(m,"prepared",p.endereco);
+                    enviaMensagem(m,"preparedCoordenador",p.endereco);
                 }
                 else{
                     System.out.println("Enviar prepared a: " + p.endereco);
@@ -139,7 +139,7 @@ public class TwoPCControlador extends TwoPC{
                         Transaction t = transacoes.get(m.id);
 
                         if (t != null && t.resultado.equals("I")) {
-                            enviaMensagem(m, "prepared", p.endereco);
+                            enviaMensagem(m, "preparedCoordenador", p.endereco);
                         } else {
                             System.out.println("Outro resultado: ");
                         }
@@ -161,7 +161,7 @@ public class TwoPCControlador extends TwoPC{
 
         for(Address ad: part){
             try {
-                enviaMensagem(m,"abort",ad);
+                enviaMensagem(m,"abortCoordenador",ad);
             }catch(Exception e) {
                 System.out.println(e);
             }
@@ -172,10 +172,10 @@ public class TwoPCControlador extends TwoPC{
 
     private CompletableFuture<Void> enviaAbort(Msg m,Address ad) {
 
-        return enviaMensagem(m,"abort",ad);
+        return enviaMensagem(m,"abortCoordenador",ad);
     }
 
-    private void passouTempoTransacao(int idT){
+    private void passouTempoTransacao(TransactionID idT){
         System.out.println("Passou tempo da transação: " + idT);
         Transaction transaction = transacoes.get(idT);
 
@@ -264,8 +264,9 @@ public class TwoPCControlador extends TwoPC{
 
         while(readerLog.hasNext()) {
             LogEntry e = (LogEntry) readerLog.next().entry();
-            if(e.xid > xid){
-                xid = e.xid;
+            if(e.xid.xid > xid){
+                //ele só mantém registo das suas transacoes
+                xid = e.xid.xid;
             }
             //verifica se a transacao já existe no mapa
             Transaction t = transacoes.get(e.xid);
@@ -298,9 +299,18 @@ public class TwoPCControlador extends TwoPC{
     }
 
 
-    public TwoPCControlador(Address[] e, int id, ManagedMessagingService ms){
+    public TwoPCControlador(Address[] e, Address id, ManagedMessagingService ms){
 
         super(e,id,ms);
+
+        log = SegmentedJournal.builder()
+                .withName("exemploIDCoordenador" + this.meuEnd)
+                .withSerializer(s)
+                .build();
+
+        readerLog = log.openReader(0);
+        writerLog = log.writer();
+
 
         System.out.println("TamEnd: " + end.length);
 
@@ -485,7 +495,9 @@ public class TwoPCControlador extends TwoPC{
 
             PedidoID pi = new PedidoID(a,pp.id);
 
-            for(Map.Entry<PedidoID,Integer> mePi : pedidos.entrySet()){
+
+
+            for(Map.Entry<PedidoID,TransactionID> mePi : pedidos.entrySet()){
 
                 if(mePi.getKey().equals(pi)){
                     System.out.println("Pedido já existe! Decidir o que temos de fazer");
@@ -507,18 +519,19 @@ public class TwoPCControlador extends TwoPC{
             System.out.println("Nao existe!");
             try {
                 HashMap<Long, byte[]> valores = new HashMap<>(pp.valores);
+                TransactionID newXid = new TransactionID(++xid,meuEnd.toString());
 
-                writerLog.append(new LogEntry(++xid, "I", valores, pi));
-                pedidos.put(pi, xid);
+                writerLog.append(new LogEntry(newXid, "I", valores, pi));
+                pedidos.put(pi, newXid);
 
                 System.out.println("Vou mandar!");
 
                 //mandar mensagem para todos para iniciar transacao
-                Msg paraMandar = new Msg(xid);
+                Msg paraMandar = new Msg(newXid);
                 HashMap<Address, HashMap<Long, byte[]>> participantes = participantesEnvolvidos(valores);
-                Transaction novaTransacao = new Transaction(xid, "I", participantes,pi);
+                Transaction novaTransacao = new Transaction(newXid, "I", participantes,pi);
                 novaTransacao.terminada = new CompletableFuture<Boolean>();
-                transacoes.put(xid, novaTransacao);
+                transacoes.put(newXid, novaTransacao);
 
                 enviaPrepared(paraMandar, novaTransacao.locksObtidos); //depois aqui vai ter thenQQCoisa
 
@@ -554,7 +567,7 @@ public class TwoPCControlador extends TwoPC{
         },es);
     }
 
-    private void cicloTerminar(int idT){
+    private void cicloTerminar(TransactionID idT){
         System.out.println("Tentar finalizar transação: " + idT);
         Transaction transaction = transacoes.get(idT);
 
@@ -595,7 +608,7 @@ public class TwoPCControlador extends TwoPC{
     public HashMap<Address,HashMap<Long,byte[]>> participantesEnvolvidos(HashMap<Long, byte[]> valores){
         HashMap<Address,HashMap<Long,byte[]>> participantes = new HashMap<>();
         for(Long aux : valores.keySet()){
-            int resto = (int)(aux % (end.length-1)) + 1; //para já o coordenador n participa
+            int resto = (int)(aux % (end.length)); //para já o coordenador n participa
             HashMap<Long,byte[]> auxiliar = participantes.get(end[resto]);
             if(auxiliar == null){
                 auxiliar = new HashMap<>();

@@ -16,7 +16,7 @@ public class Cliente {
         if(Integer.parseInt(args[0]) == 1){
             endereco = "localhost:12342";
             valores = new HashMap<>();
-            valores.put(Long.valueOf(3), "cenas".getBytes());
+            valores.put(Long.valueOf(2), "cenas".getBytes());
 
         }
 

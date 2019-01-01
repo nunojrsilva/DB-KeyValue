@@ -14,8 +14,39 @@ import java.util.concurrent.*;
 
 //mensagem para ser enviada!
 
-class Transaction{
+class TransactionID{
     public int xid;
+    public String coordenador;
+
+    public TransactionID(int xid, String coordenador) {
+        this.xid = xid;
+        this.coordenador = coordenador;
+    }
+
+    @Override
+    public String toString() {
+        return "TransactionID{" +
+                "xid=" + xid +
+                ", coordenador='" + coordenador + '\'' +
+                '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        TransactionID that = (TransactionID) o;
+        return xid == that.xid &&
+                coordenador.equals(that.coordenador);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(xid, coordenador);
+    }
+}
+class Transaction{
+    public TransactionID xid;
     public String resultado; //pode ser I; A ou C; F para o controlador
                             //pode ser P ou A; A ou C para o participante
 
@@ -29,13 +60,13 @@ class Transaction{
 
     public PedidoID pedido; //id do pedido para esta transacao
 
-    public Transaction(int xid, String resultado){
+    public Transaction(TransactionID xid, String resultado){
         this.xid = xid;
         this.resultado = resultado;
 
     }
 
-    public Transaction(int xid, String resultado, HashMap<Address, HashMap<Long, byte[]>> participantes, PedidoID p) {
+    public Transaction(TransactionID xid, String resultado, HashMap<Address, HashMap<Long, byte[]>> participantes, PedidoID p) {
         this.xid = xid;
         this.resultado = resultado;
         this.participantes = participantes;
@@ -67,11 +98,18 @@ public class TestLog {
 
         for(int i = 0; i < e.length; i++){
             SegmentedJournal<Object> log = SegmentedJournal.builder()
-                    .withName("exemploID" + i)
+                    .withName("exemploIDCoordenador" + e[i])
                     .withSerializer(ser)
                     .build();
-            System.out.println("-------------------------------ID:"+i+"-----------------------------");
+            System.out.println("-------------------------------IDC:"+i+"-----------------------------");
             leLog(log);
+
+            SegmentedJournal<Object> logP = SegmentedJournal.builder()
+                    .withName("exemploIDParticipante" + e[i])
+                    .withSerializer(ser)
+                    .build();
+            System.out.println("-------------------------------IDP:"+i+"-----------------------------");
+            leLog(logP);
         }
     }
     public static void main(String[] args) {
@@ -89,24 +127,12 @@ public class TestLog {
             leLogs(end);
         }
         else {
-            if (id == 0) {
-                ManagedMessagingService ms = NettyMessagingService.builder()
-                        .withAddress(end[id])
-                        .build();
-                ms.start();
-
-                TwoPCControlador tpc = new TwoPCControlador(end, id, ms);
-
-                //tpc.iniciaTransacao(valores);
-            }
-            else {
-                ManagedMessagingService ms = NettyMessagingService.builder()
-                        .withAddress(end[id])
-                        .build();
-                ms.start();
-                TwoPCParticipante tpp = new TwoPCParticipante(end, id, ms);
-            }
-
+            ManagedMessagingService ms = NettyMessagingService.builder()
+                    .withAddress(end[id])
+                    .build();
+            ms.start();
+            TwoPCControlador tpc = new TwoPCControlador(end, end[id], ms);
+            TwoPCParticipante tpp = new TwoPCParticipante(end, end[id], ms);
 
         }
 

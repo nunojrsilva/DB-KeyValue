@@ -13,13 +13,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 class Lock{
-    Address coordenador;
-    int xid;
+    TransactionID xid;
     int lockID;
     CompletableFuture<Void> obtido = new CompletableFuture<>();
 
-    public Lock(Address coordenador, int xid, int id) {
-        this.coordenador = coordenador;
+    public Lock(TransactionID xid, int id) {
         this.xid = xid;
         lockID = id;
     }
@@ -31,14 +29,13 @@ class Lock{
 
         Lock al = (Lock)o;
 
-        return (this.xid == al.xid) &&
-                (this.coordenador.equals(al.coordenador));
+        return this.xid.equals(al.xid);
     }
 }
 
 class TwoPCParticipante extends TwoPC{
 
-    private HashMap<Integer, Transaction> transacoes = new HashMap<>();
+    private HashMap<TransactionID, Transaction> transacoes = new HashMap<>();
 
     /**
      * @valores Para guadar os pares chave-valor
@@ -107,7 +104,7 @@ class TwoPCParticipante extends TwoPC{
         System.out.println("Lock libertado!");
         if(lockAtual != null){
             System.out.println("Ja libertei o lock e vou avisar o seguinte!");
-            enviaPrepared(new Msg(lockAtual.xid), lockAtual.coordenador);
+            enviaPrepared(new Msg(lockAtual.xid), Address.from(lockAtual.xid.coordenador));
         }
     }
 
@@ -122,7 +119,7 @@ class TwoPCParticipante extends TwoPC{
             Msg paraMandar = new Msg(t.xid);
             switch (t.resultado) {
                 case ("P"):
-                    Lock l = new Lock(end[0], t.xid, lockID++);
+                    Lock l = new Lock(t.xid, lockID++);
 
                     if(primeiroLock){
                         primeiroLock=false;
@@ -132,16 +129,16 @@ class TwoPCParticipante extends TwoPC{
 
                     l.obtido.thenAccept(v -> {
                         System.out.println("Posso enviar!");
-                        enviaPrepared(paraMandar, end[0]);
+                        enviaPrepared(paraMandar, Address.from(paraMandar.id.coordenador));
                     });
                     break;
                 case ("A"):
                     //PRECISO POR AQUI UM lockID++?????????
-                    enviaAbort(paraMandar,end[0]);
+                    enviaAbort(paraMandar,Address.from(paraMandar.id.coordenador));
                     break;
 
                 case ("C"):
-                    enviaOk(paraMandar,end[0]);
+                    enviaOk(paraMandar,Address.from(paraMandar.id.coordenador));
                     break;
             }
         }
@@ -182,19 +179,19 @@ class TwoPCParticipante extends TwoPC{
             }
 
             if(e.data.equals("P")){
-                Lock aux = new Lock(end[0],t.xid,lockID++);
+                Lock aux = new Lock(t.xid,lockID++);
                 filaLock.add(aux);
             }
             else{
                 System.out.println("Antes de remover: " + filaLock.size());
-                filaLock.removeIf(lock -> (lock.xid == e.xid) && lock.coordenador.equals(end[0]));
+                filaLock.removeIf(lock -> (lock.xid.equals(e.xid)));
                 System.out.println("Depois de remover: " + filaLock.size());
             }
 
         }
         lockAtual = filaLock.pollFirst();
         if(lockAtual != null) {
-            System.out.println("Lock atual: " + lockAtual.coordenador + ", " + lockAtual.xid);
+            System.out.println("Lock atual: " + lockAtual.xid);
         }
         analisaTransacaoParticipante();
 
@@ -204,16 +201,25 @@ class TwoPCParticipante extends TwoPC{
 
 
 
-    public TwoPCParticipante(Address[] e, int id, ManagedMessagingService ms){
+    public TwoPCParticipante(Address[] e, Address id, ManagedMessagingService ms){
 
         super(e,id,ms);
+
+        log = SegmentedJournal.builder()
+                .withName("exemploIDParticipante" + this.meuEnd)
+                .withSerializer(s)
+                .build();
+
+        readerLog = log.openReader(0);
+        writerLog = log.writer();
+
 
 
         System.out.println("TamEnd: " + end.length);
 
         recuperaLogParticipante();
 
-        ms.registerHandler("prepared", (a,m)-> {
+        ms.registerHandler("preparedCoordenador", (a,m)-> {
             System.out.println("Recebi prepared!");
             Msg nova = s.decode(m);
 
@@ -229,7 +235,7 @@ class TwoPCParticipante extends TwoPC{
                 String resultado = transacoes.get(nova.id).resultado;
                 switch (resultado){
                     case "A":
-                        enviaAbort(paraMandar,end[0]);
+                        enviaAbort(paraMandar,Address.from(paraMandar.id.coordenador));
                         break;
                 }
                 return;
@@ -250,7 +256,7 @@ class TwoPCParticipante extends TwoPC{
                 transacoes.put(nova.id, t);
             }
 
-            Lock meuLock = new Lock(a,nova.id,lockID++);
+            Lock meuLock = new Lock(nova.id,lockID++);
 
             if(lockAtual == null){
                 //posso mandar e adquiro lock
@@ -278,7 +284,7 @@ class TwoPCParticipante extends TwoPC{
                 Msg paraMandar = new Msg(nova.id);
                 //Só depois de enviar o prepared é que eu vou fazer o lock, ou fazemos antes? Antes
                 System.out.println("Posso enviar!");
-                enviaPrepared(paraMandar, end[0]);
+                enviaPrepared(paraMandar, Address.from(paraMandar.id.coordenador));
             });
             /**
              * Vou agora mandar a resposta para o coordenador
@@ -290,12 +296,12 @@ class TwoPCParticipante extends TwoPC{
 
         }, es);
 
-        ms.registerHandler("abort", (a,m)-> {
+        ms.registerHandler("abortCoordenador", (a,m)-> {
             System.out.println("Recebi abort!");
             Msg nova = s.decode(m);
 
             System.out.println("SIZE da fila: " + filaLock.size());
-            filaLock.removeIf(l -> (l.coordenador.toString().equals(a.toString())) && (l.xid == nova.id));
+            filaLock.removeIf(l -> (l.xid.equals(nova.id)));
             System.out.println("SIZE da fila depois: " + filaLock.size());
 
             if(transacoes.containsKey(nova.id) == false){
@@ -320,16 +326,16 @@ class TwoPCParticipante extends TwoPC{
 
             System.out.println("Vou enviar ok no abort!");
             //LIBERTAR LOCK
-            if((lockAtual != null) && (lockAtual.xid == nova.id) && lockAtual.coordenador.toString().equals(a.toString())) {
+            if((lockAtual != null) && (lockAtual.xid.equals(nova.id))) {
                 System.out.println("Sou eu que tenho o lock!");
                 libertaLock();
             }
-            enviaOk(paraMandar,end[0]);
+            enviaOk(paraMandar,Address.from(paraMandar.id.coordenador));
 
 
         }, es);
 
-        ms.registerHandler("commit", (a,m)-> {
+        ms.registerHandler("commitCoordenador", (a,m)-> {
             System.out.println("Recebi commit!");
             MsgCommit nova = s.decode(m);
 
@@ -373,7 +379,7 @@ class TwoPCParticipante extends TwoPC{
             System.out.println("Vou enviar ok no commit");
             //LIBERTAR LOCK
 
-            enviaOk(paraMandar,end[0]);
+            enviaOk(paraMandar,Address.from(paraMandar.id.coordenador));
 
 
         }, es);

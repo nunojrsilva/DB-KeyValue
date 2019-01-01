@@ -14,8 +14,7 @@ public class ClienteStub {
 
    //private HashMap<Address, Participante> coordenadores = new HashMap<>();
    private ArrayList<Address> coordEnderecos = new ArrayList<>();
-   private int coordAtual= 0;
-   private int pedidoAtual = 0;
+   private int coordAtual;
    private ManagedMessagingService ms;
    private Serializer s = DBKeyValueProtocol.newSerializer();
    private ScheduledExecutorService es = Executors.newSingleThreadScheduledExecutor();
@@ -25,12 +24,23 @@ public class ClienteStub {
 
    public ClienteStub(ManagedMessagingService ms){
         this.ms = ms;
-        pedidoAtual = 0;
         //Participante part = new Participante();
         Address partEnd = Address.from("localhost:23451");
-        //part.endereco = partEnd;
+        Address partEnd2 = Address.from("localhost:23452");
+        Address partEnd3 = Address.from("localhost:23453");
+
+       //part.endereco = partEnd;
         //coordenadores.put(partEnd,part);
         coordEnderecos.add(partEnd);
+        coordEnderecos.add(partEnd2);
+        coordEnderecos.add(partEnd3);
+        Random rand = new Random();
+
+        int n = rand.nextInt(coordEnderecos.size());
+        coordAtual = n;
+
+
+        System.out.println("Novo clientstub! O coordenador atual é: " + coordEnderecos.get(coordAtual));
         //inicializar Serializer
         this.ms.registerHandler("put", (a,m)->{
            //System.out.println("Está completo o pedido put!");
@@ -109,6 +119,7 @@ public class ClienteStub {
 
     public CompletableFuture<Boolean> put(Map<Long,byte[]> values) {
         //
+        System.out.println("-------Novo pedido put-------------");
         CompletableFuture<Boolean> res = new CompletableFuture<Boolean>();
         String idPedido = UUID.randomUUID().toString();
         PedidoPut pp = new PedidoPut(values, idPedido);
@@ -117,9 +128,9 @@ public class ClienteStub {
 
         enviaMensagem(s.encode(pp), "put", coordEnderecos.get(coordAtual));
         //ms.sendAsync(coordenadores.get(coordEnderecos.get(coordAtual)).endereco,"put", s.encode(pp));
-
+        int auxCoordenador = coordAtual;
         es.schedule(() -> {
-            verificaPedido(pp.id, coordEnderecos.get(coordAtual));
+            verificaPedido(pp.id, coordEnderecos.get(auxCoordenador));
         },8, TimeUnit.SECONDS);
 
         coordAtual = (coordAtual + 1) % coordEnderecos.size();

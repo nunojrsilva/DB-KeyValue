@@ -28,15 +28,15 @@ public class TwoPC {
     SegmentedJournalWriter<Object> writerLog;
 
     Address[] end;
-    int meuID;
+    Address meuEnd;
     ManagedMessagingService ms;
     Serializer s;
     ScheduledExecutorService es;
     HashMap<Address,Participante> participantes = new HashMap<Address,Participante>();
 
-    public TwoPC(Address[] end, int meuID, ManagedMessagingService ms) {
+    public TwoPC(Address[] end, Address meuID, ManagedMessagingService ms) {
         this.end = end;
-        this.meuID = meuID;
+        this.meuEnd = meuID;
         this.ms = ms;
         for(Address ad: end){
             Participante part = new Participante();
@@ -46,15 +46,7 @@ public class TwoPC {
 
         s = DBKeyValueProtocol.newSerializer();
 
-        log = SegmentedJournal.builder()
-                .withName("exemploID" + this.meuID)
-                .withSerializer(s)
-                .build();
-
         es = Executors.newSingleThreadScheduledExecutor();
-
-        readerLog = log.openReader(0);
-        writerLog = log.writer();
 
     }
 }
