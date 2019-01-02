@@ -274,6 +274,7 @@ class TwoPCParticipante extends TwoPC{
 
                 Transaction t = new Transaction(nova.id, "P");
                 transacoes.put(nova.id, t);
+
             }
 
             Lock meuLock = new Lock(nova.id,lockID++);
