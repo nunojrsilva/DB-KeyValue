@@ -6,4 +6,6 @@ public interface InterfaceParticipante {
     public Object atualizaValores(Object novos);
 
     public Object getValores();
+
+    public LockGlobal novoLock(TransactionID xid, Object o);
 }

@@ -16,4 +16,13 @@ public class NossoLockGlobal extends LockGlobal {
     }
 
     //tem de implementar o equals igual ao do lock na class 2PCParticipante
+    public boolean equals(Object o){
+        if(o == null || !(o instanceof NossoLockGlobal)){
+            return false;
+        }
+
+        NossoLockGlobal al = (NossoLockGlobal)o;
+
+        return this.xid.equals(al.xid);
+    }
 }

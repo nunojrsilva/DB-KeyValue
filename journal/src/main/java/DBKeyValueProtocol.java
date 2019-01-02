@@ -8,9 +8,10 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 class Msg {
     TransactionID id;
+    Object valores;
 
-    public Msg(TransactionID id) {
-        this.id = id;
+    public Msg(TransactionID id, Object valores) {
+        this.id = id;this.valores = valores;
     }
 }
 
@@ -19,7 +20,7 @@ class MsgCommit extends Msg {
     Object valores;
 
     public MsgCommit(TransactionID id, Object valores) {
-        super(id);
+        super(id,valores);
         this.valores = valores;
     }
 }

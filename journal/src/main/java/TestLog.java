@@ -205,9 +205,13 @@ public class TestLog {
                 return res;
             };
 
-
-            TwoPCControlador tpc = new TwoPCControlador(end, end[id], ms,participantesEnvolvidos,juntaValores);
-            TwoPCParticipante tpp = new TwoPCParticipante(end, end[id], ms, val, atualizaValores);
+            ControlaParticipante cp = new ControlaParticipante();
+            ControlaControlador cc = new ControlaControlador(end);
+            TwoPLocking locking = new TwoPLocking();
+            TwoPCControlador tpc = new TwoPCControlador(end, end[id], ms,
+                    DBKeyValueProtocol.newSerializer(),cc);//participantesEnvolvidos,juntaValores);
+            TwoPCParticipante tpp = new TwoPCParticipante(end, end[id], ms,
+                    DBKeyValueProtocol.newSerializer(),cp,locking);//val, atualizaValores);
 
         }
 

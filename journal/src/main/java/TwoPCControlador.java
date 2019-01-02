@@ -53,12 +53,14 @@ public class TwoPCControlador extends TwoPC{
     private HashMap<TransactionID, Transaction> transacoes = new HashMap<>();
     private HashMap<PedidoID,TransactionID> pedidos = new HashMap<>();
     private int xid;
-    private Function<Object,HashMap<Address,Object>> distribuiPorParticipante; //funcao que da os participantes
+    /*private Function<Object,HashMap<Address,Object>> distribuiPorParticipante; //funcao que da os participantes
     private Function<HashMap<Address,Object>,Object> juntaValores; //funcao inversa à anterior
     //private Consumer<Msg> handlerMensagem;
 
     private Function<Object,HashMap<Address,Object>> participantesGet; //funcao que devolve
     // os participantes de um get
+    */
+    private InterfaceControlador controla;
 
     private void adicionaLock(Address a, Transaction t){
 
@@ -89,7 +91,7 @@ public class TwoPCControlador extends TwoPC{
     }
 
 
-    private CompletableFuture<Void> enviaCommit(MsgCommit mc, List<Address> part, Transaction t){
+    private CompletableFuture<Void> enviaCommit(MsgCommit mc, Transaction t){
 
         Participante abaixo = null;
         for(Participante p: t.locksObtidos){
@@ -125,12 +127,48 @@ public class TwoPCControlador extends TwoPC{
         return CompletableFuture.completedFuture(null); //pode ser um allOf futuramente
     }
 
+    private CompletableFuture<Void> enviaPrepared(Msg mc, Transaction t){
+
+        Participante abaixo = null;
+        for(Participante p: t.locksObtidos){
+            try {
+                if(abaixo == null){
+                    System.out.println("Enviar prepared com size 0");
+                    mc.valores = t.participantes.get(p.endereco);
+                    enviaMensagem(mc,"preparedCoordenador",p.endereco);
+                }
+                else{
+                    System.out.println("Enviar prepared a: " + p.endereco);
+                    System.out.println("Abaixo no prepared: " + abaixo.endereco);
+                    abaixo.espera.thenAccept(v -> {
+                        Transaction taux = transacoes.get(mc.id);
+
+                        if (taux != null && taux.resultado.equals("I")) {
+                            mc.valores = t.participantes.get(p.endereco);
+                            enviaMensagem(mc,"preparedCoordenador",p.endereco);
+                        } else {
+                            System.out.println("Outro resultado no prepared: ");
+                        }
+
+
+
+                    });
+                }
+
+            }catch(Exception e) {
+                System.out.println(e);
+            }
+            abaixo = p; //atualizar o que está antes dele
+        }
+        return CompletableFuture.completedFuture(null); //pode ser um allOf futuramente
+    }
+
     private CompletableFuture<Void> enviaCommit(MsgCommit mc,Address ad) {
 
         return enviaMensagem(mc,"commitCoordenador", ad);
     }
 
-    private CompletableFuture<Void> enviaPrepared(Msg m, TreeSet<Participante> part){
+    /*private CompletableFuture<Void> enviaPrepared(Msg m, TreeSet<Participante> part){
         Participante abaixo = null;
         for(Participante p: part){
             try {
@@ -161,12 +199,13 @@ public class TwoPCControlador extends TwoPC{
             abaixo = p;
         }
         return CompletableFuture.completedFuture(null); //pode ser um allOf futuramente
-    }
+    }*/
 
-    private CompletableFuture<Void> enviaAbort(Msg m, List<Address> part){
+    private CompletableFuture<Void> enviaAbort(Msg m, List<Address> part, Transaction t){
 
         for(Address ad: part){
             try {
+                m.valores = t.participantes.get(ad);
                 enviaMensagem(m,"abortCoordenador",ad);
             }catch(Exception e) {
                 System.out.println(e);
@@ -196,12 +235,12 @@ public class TwoPCControlador extends TwoPC{
             writerLog.append(new LogEntry(idT,"A",null));
             transaction.resultado = "A";
             System.out.println("Res: " + transacoes.get(idT).resultado);
-            Msg paraMandarAux = new Msg(idT);
+            Msg paraMandarAux = new Msg(idT,null);
             //completar todos os locks (pois a resposta será abort)
             for(Participante p: transaction.locksObtidos){
                 p.espera.complete(true);
             } //depois podemos por um allOf antes do abort
-            enviaAbort(paraMandarAux,new ArrayList<>(transaction.participantes.keySet()));
+            enviaAbort(paraMandarAux,new ArrayList<>(transaction.participantes.keySet()),transaction);
 
             es.schedule(() -> {
                 cicloTerminar(idT);
@@ -217,8 +256,8 @@ public class TwoPCControlador extends TwoPC{
         for(Transaction t: transacoes.values()){
             if(t.resultado.equals("I")){
                 //mandar mensagem para todos prepared
-                Msg paraMandar = new Msg(t.xid);
-                enviaPrepared(paraMandar,t.locksObtidos);
+                Msg paraMandar = new Msg(t.xid,null);
+                enviaPrepared(paraMandar,t);
 
 
                 //dar tempo para a resposta
@@ -234,7 +273,7 @@ public class TwoPCControlador extends TwoPC{
 
                     //mandar mensagem a todos a dizer commit
                     MsgCommit msgC = new MsgCommit(t.xid,null);
-                    enviaCommit(msgC,new ArrayList<>(t.participantes.keySet()),t);
+                    enviaCommit(msgC,t);
 
 
                     es.schedule( ()-> {
@@ -245,9 +284,9 @@ public class TwoPCControlador extends TwoPC{
                 else{
                     if(t.resultado.equals("A")){
                         //mandar mesnsagem para todos abort
-                        Msg paraMandar = new Msg(t.xid);
+                        Msg paraMandar = new Msg(t.xid,null);
 
-                        enviaAbort(paraMandar,new ArrayList<>(t.participantes.keySet()));
+                        enviaAbort(paraMandar,new ArrayList<>(t.participantes.keySet()),t);
 
 
                         es.schedule( ()-> {
@@ -283,7 +322,7 @@ public class TwoPCControlador extends TwoPC{
                 if (e.valores != null) {
                     //se existirem valores (em caso de I ou C) entam vai buscar os participantes envolvidos e cada valor
                     // para o participante
-                    part = distribuiPorParticipante.apply(e.valores);
+                    part = controla.distribuiPorParticipante(e.valores);//distribuiPorParticipante.apply(e.valores);
                 }
 
                 t = new Transaction(e.xid, e.data, part, e.pedido);
@@ -306,10 +345,8 @@ public class TwoPCControlador extends TwoPC{
 
 
     public TwoPCControlador(Address[] e, Address id, ManagedMessagingService ms,
-                            Function<Object,HashMap<Address,Object>> dPP,
-                            Function<HashMap<Address,Object>,Object> jV){
-
-        super(e,id,ms);
+                            Serializer ser, InterfaceControlador ic){
+        super(e,id,ms,ser);
 
         log = SegmentedJournal.builder()
                 .withName("exemploIDCoordenador" + this.meuEnd)
@@ -319,8 +356,10 @@ public class TwoPCControlador extends TwoPC{
         readerLog = log.openReader(0);
         writerLog = log.writer();
 
-        this.distribuiPorParticipante = dPP;
+/*        this.distribuiPorParticipante = dPP;
         this.juntaValores = jV;
+*/
+        this.controla = ic;
 
         System.out.println("TamEnd: " + end.length);
 
@@ -397,7 +436,7 @@ public class TwoPCControlador extends TwoPC{
                     if(!taux.resultado.equals("F")) {
                         //e o resultado n é F, se fosse F era estranho (à partida não pode acontecer)
                         if (taux.resultado.equals("A")) {
-                            Msg paraMandar = new Msg(nova.id);
+                            Msg paraMandar = new Msg(nova.id,taux.participantes.get(o));
                             enviaAbort(paraMandar, o);
                         }
 
@@ -418,7 +457,7 @@ public class TwoPCControlador extends TwoPC{
                     if(taux.quaisResponderam.size() == taux.participantes.size()){
                         System.out.println("Já responderam todos!");
                         //já responderam todos e pode-se mandar fazer commit
-                        Object valoresGuardar = juntaValores.apply(taux.participantes);
+                        Object valoresGuardar = controla.juntaValores(taux.participantes);//juntaValores.apply(taux.participantes);
                         writerLog.append(new LogEntry(nova.id, "C", valoresGuardar));
                         taux.resultado = "C";
                         taux.quaisResponderam = new HashSet<>(); //volta-se a por que ninguem respondeu
@@ -427,7 +466,7 @@ public class TwoPCControlador extends TwoPC{
 
                         //mandar mensagem a todos a dizer commit
                         MsgCommit msgC = new MsgCommit(nova.id, null);
-                        enviaCommit(msgC,new ArrayList<>(taux.participantes.keySet()),taux);
+                        enviaCommit(msgC,taux);
 
                         System.out.println("Resultado depois: " + transacoes.get(nova.id).resultado);
 
@@ -459,7 +498,7 @@ public class TwoPCControlador extends TwoPC{
 
             if(transaction.resultado.equals("A")){
                 //já tem resultado, pelo que já mandou para todos e só mandamos para o que enviou
-                Msg paraMandar = new Msg(nova.id);
+                Msg paraMandar = new Msg(nova.id,transaction.participantes.get(a));
                 enviaAbort(paraMandar,a);
             }
             else {
@@ -478,14 +517,14 @@ public class TwoPCControlador extends TwoPC{
 
 
                     //mandar mensagem para todos os participantes daquela transacao
-                    Msg paraMandar = new Msg(nova.id);
+                    Msg paraMandar = new Msg(nova.id,null);
 
                     //completar todos os locks (pois a resposta será abort)
                     for(Participante p: transaction.locksObtidos){
                         p.espera.complete(null);
                     } //depois podemos por um allOf antes do abort
 
-                    enviaAbort(paraMandar, new ArrayList<>(transaction.participantes.keySet()));
+                    enviaAbort(paraMandar, new ArrayList<>(transaction.participantes.keySet()),transaction);
 
 
                     es.schedule(() -> {
@@ -538,13 +577,13 @@ public class TwoPCControlador extends TwoPC{
                 System.out.println("Vou mandar!");
 
                 //mandar mensagem para todos para iniciar transacao
-                Msg paraMandar = new Msg(newXid);
-                HashMap<Address, Object> participantes = distribuiPorParticipante.apply(pp.valores);
+                Msg paraMandar = new Msg(newXid,null);
+                HashMap<Address, Object> participantes = controla.distribuiPorParticipante(pp.valores);//distribuiPorParticipante.apply(pp.valores);
                 Transaction novaTransacao = new Transaction(newXid, "I", participantes,pi);
                 novaTransacao.terminada = new CompletableFuture<Boolean>();
                 transacoes.put(newXid, novaTransacao);
 
-                enviaPrepared(paraMandar, novaTransacao.locksObtidos); //depois aqui vai ter thenQQCoisa
+                enviaPrepared(paraMandar, novaTransacao); //depois aqui vai ter thenQQCoisa
 
 
 
@@ -598,14 +637,14 @@ public class TwoPCControlador extends TwoPC{
 
             if(transaction.resultado.equals("A")){
                 //se for A, manda-se abort
-                Msg msg = new Msg(transaction.xid);
-                enviaAbort(msg,naoResponderam);
+                Msg msg = new Msg(transaction.xid,null);
+                enviaAbort(msg,naoResponderam,transaction);
 
             }
             else{
                 //senao e C e manda-se commit
                 MsgCommit msg = new MsgCommit(transaction.xid, null);
-                enviaCommit(msg,naoResponderam,transaction);
+                enviaCommit(msg,transaction);
 
             }
 

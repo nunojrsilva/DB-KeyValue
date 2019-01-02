@@ -8,6 +8,7 @@ import java.util.HashSet;
 public class ControlaParticipante implements InterfaceParticipante{
 
     public HashMap<Long,byte[]> valores = new HashMap<>();
+    public int lockId = 0;
 
     public ControlaParticipante(){
 
@@ -33,5 +34,12 @@ public class ControlaParticipante implements InterfaceParticipante{
     public Object getValores() {
         return valores;
     }
+
+    @Override
+    public LockGlobal novoLock(TransactionID xid, Object o) {
+        NossoLockGlobal nlg = new NossoLockGlobal(xid,lockId++,o);
+        return nlg;
+    }
+
 
 }

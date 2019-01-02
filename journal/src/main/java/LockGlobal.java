@@ -1,13 +1,13 @@
 import java.util.concurrent.CompletableFuture;
 
 public abstract class LockGlobal{
-    public CompletableFuture<Void> completo;
+    public CompletableFuture<Void> obtido = new CompletableFuture<>();
     public TransactionID xid;
-    public int lockid;
+    public int lockID;
 
     public LockGlobal(TransactionID xid, int lockid) {
         this.xid = xid;
-        this.lockid = lockid;
+        this.lockID = lockid;
     }
 
     abstract Object items();
