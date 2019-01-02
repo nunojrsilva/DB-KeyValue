@@ -53,9 +53,12 @@ public class TwoPCControlador extends TwoPC{
     private HashMap<TransactionID, Transaction> transacoes = new HashMap<>();
     private HashMap<PedidoID,TransactionID> pedidos = new HashMap<>();
     private int xid;
-    private Function<Object,HashMap<Address,Object>> distribuiPorParticipante; //funcao que atualiza os valores
+    private Function<Object,HashMap<Address,Object>> distribuiPorParticipante; //funcao que da os participantes
     private Function<HashMap<Address,Object>,Object> juntaValores; //funcao inversa à anterior
     //private Consumer<Msg> handlerMensagem;
+
+    private Function<Object,HashMap<Address,Object>> participantesGet; //funcao que devolve
+    // os participantes de um get
 
     private void adicionaLock(Address a, Transaction t){
 

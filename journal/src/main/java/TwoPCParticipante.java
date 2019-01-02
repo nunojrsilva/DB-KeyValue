@@ -44,6 +44,9 @@ class TwoPCParticipante extends TwoPC{
      */
     private Object valores; //podemos mudar para ser modular
     private BiFunction<Object,Object,Object> atualizaValores; //funcao que atualiza os valores
+
+    private Function<Object,Object> devolveValores; //funcao que devolve valores consoante
+    // a regra utilizada
     /**
      * Para o 2PL:
      * Uma variável que diz quem tem o lock atual

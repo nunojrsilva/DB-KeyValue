@@ -51,14 +51,14 @@ public class ClienteStub {
            resultadoPedidos.get(rpp.id).complete(rpp.resultado);
        },es);
 
-       /*this.ms.registerHandler("get", (a,m)->{
+       this.ms.registerHandler("get", (a,m)->{
            //System.out.println("Está completo o pedido Get!");
            PedidoGet rpg = s.decode(m);
            System.out.println(rpg.id);
            rpg.finalizado = true;
            mapaPedidos.put(rpg.id,rpg);
-           resultadoPedidosGet.get(rpg.id).complete(rpg.resultado);
-       },es);*/
+           resultadoPedidosGet.get(rpg.id).complete((HashMap<Long,byte[]>)rpg.resultado);
+       },es);
    }
 
     private CompletableFuture<Void> enviaMensagem(byte[] m, String assunto, Address a){

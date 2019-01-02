@@ -76,12 +76,12 @@ interface Pedido{
 }
 
 class PedidoGet implements Pedido{
-    public Collection<Long> keys;
+    public Object keys;
     public boolean finalizado;
     public Object resultado;
     public String id;
 
-    public PedidoGet ( Collection <Long> keys, String id) {
+    public PedidoGet ( Object keys, String id) {
         this.keys = keys;
         this.id = id;
 

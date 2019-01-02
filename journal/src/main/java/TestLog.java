@@ -179,6 +179,33 @@ public class TestLog {
                 return valA;
             };
 
+            Function<Object,HashMap<Address,Object>> participantesGet = chavesInput -> {
+                HashMap<Address,Object> participantes = new HashMap<>();
+                Collection<Long> keys = (Collection<Long>)chavesInput;
+                for(Long aux : keys){
+                    int resto = (int)(aux % (end.length)); //para já o coordenador n participa
+                    Object obj = participantes.get(end[resto]);
+                    Collection<Long> auxiliar = (Collection<Long>) obj;
+                    if(auxiliar == null){
+                        auxiliar = new HashSet<>();
+                    }
+                    auxiliar.add(aux);
+                    participantes.put(end[resto],auxiliar);
+                }
+                return participantes;
+            };
+
+            BiFunction<Object,Object,Object> devolveValores = (chavesInput,valoresInp) -> {
+                Collection<Long> chaves = (Collection<Long>)chavesInput;
+                HashMap<Long,byte[]> valores = (HashMap<Long, byte[]>)valoresInp;
+
+                HashMap<Long,byte[]> res = new HashMap<>();
+                chaves.forEach(a -> res.put(a,valores.get(a)));
+
+                return res;
+            };
+
+
             TwoPCControlador tpc = new TwoPCControlador(end, end[id], ms,participantesEnvolvidos,juntaValores);
             TwoPCParticipante tpp = new TwoPCParticipante(end, end[id], ms, val, atualizaValores);
 
