@@ -9,6 +9,8 @@ import io.atomix.utils.serializer.Serializer;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 class PedidoID{
@@ -51,7 +53,8 @@ public class TwoPCControlador extends TwoPC{
     private HashMap<TransactionID, Transaction> transacoes = new HashMap<>();
     private HashMap<PedidoID,TransactionID> pedidos = new HashMap<>();
     private int xid;
-
+    private Function<Object,HashMap<Address,Object>> distribuiPorParticipante; //funcao que atualiza os valores
+    private Function<HashMap<Address,Object>,Object> juntaValores; //funcao inversa à anterior
     //private Consumer<Msg> handlerMensagem;
 
     private void adicionaLock(Address a, Transaction t){
@@ -114,7 +117,7 @@ public class TwoPCControlador extends TwoPC{
             }catch(Exception e) {
                 System.out.println(e);
             }
-            abaixo = p;
+            abaixo = p; //atualizar o que está antes dele
         }
         return CompletableFuture.completedFuture(null); //pode ser um allOf futuramente
     }
@@ -272,12 +275,12 @@ public class TwoPCControlador extends TwoPC{
             Transaction t = transacoes.get(e.xid);
             if(t == null) {
                 //caso não exista cria e adiciona ao mapa
-                HashMap<Address, HashMap<Long, byte[]>> part = null;
+                HashMap<Address, Object> part = null;
                 //System.out.println(e.toString());
                 if (e.valores != null) {
                     //se existirem valores (em caso de I ou C) entam vai buscar os participantes envolvidos e cada valor
                     // para o participante
-                    part = participantesEnvolvidos(e.valores);
+                    part = distribuiPorParticipante.apply(e.valores);
                 }
 
                 t = new Transaction(e.xid, e.data, part, e.pedido);
@@ -299,7 +302,9 @@ public class TwoPCControlador extends TwoPC{
     }
 
 
-    public TwoPCControlador(Address[] e, Address id, ManagedMessagingService ms){
+    public TwoPCControlador(Address[] e, Address id, ManagedMessagingService ms,
+                            Function<Object,HashMap<Address,Object>> dPP,
+                            Function<HashMap<Address,Object>,Object> jV){
 
         super(e,id,ms);
 
@@ -311,6 +316,8 @@ public class TwoPCControlador extends TwoPC{
         readerLog = log.openReader(0);
         writerLog = log.writer();
 
+        this.distribuiPorParticipante = dPP;
+        this.juntaValores = jV;
 
         System.out.println("TamEnd: " + end.length);
 
@@ -408,8 +415,8 @@ public class TwoPCControlador extends TwoPC{
                     if(taux.quaisResponderam.size() == taux.participantes.size()){
                         System.out.println("Já responderam todos!");
                         //já responderam todos e pode-se mandar fazer commit
-                        writerLog.append(new LogEntry(nova.id, "C", taux.participantes.values()
-                                .stream().reduce(new HashMap<>(), (r,n) -> { r.putAll(n); return r;})));
+                        Object valoresGuardar = juntaValores.apply(taux.participantes);
+                        writerLog.append(new LogEntry(nova.id, "C", valoresGuardar));
                         taux.resultado = "C";
                         taux.quaisResponderam = new HashSet<>(); //volta-se a por que ninguem respondeu
                         // (pois ainda nao responderam ao commit)
@@ -518,17 +525,18 @@ public class TwoPCControlador extends TwoPC{
 
             System.out.println("Nao existe!");
             try {
-                HashMap<Long, byte[]> valores = new HashMap<>(pp.valores);
+
+                //HashMap<Long, byte[]> valores = new HashMap<>(pp.valores);
                 TransactionID newXid = new TransactionID(++xid,meuEnd.toString());
 
-                writerLog.append(new LogEntry(newXid, "I", valores, pi));
+                writerLog.append(new LogEntry(newXid, "I", pp.valores, pi));
                 pedidos.put(pi, newXid);
 
                 System.out.println("Vou mandar!");
 
                 //mandar mensagem para todos para iniciar transacao
                 Msg paraMandar = new Msg(newXid);
-                HashMap<Address, HashMap<Long, byte[]>> participantes = participantesEnvolvidos(valores);
+                HashMap<Address, Object> participantes = distribuiPorParticipante.apply(pp.valores);
                 Transaction novaTransacao = new Transaction(newXid, "I", participantes,pi);
                 novaTransacao.terminada = new CompletableFuture<Boolean>();
                 transacoes.put(newXid, novaTransacao);

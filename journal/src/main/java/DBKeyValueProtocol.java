@@ -16,9 +16,9 @@ class Msg {
 
 //mensagem para ser enviado do coordenador ao participante para o commit
 class MsgCommit extends Msg {
-    HashMap<Long,byte[]> valores;
+    Object valores;
 
-    public MsgCommit(TransactionID id, HashMap<Long, byte[]> valores) {
+    public MsgCommit(TransactionID id, Object valores) {
         super(id);
         this.valores = valores;
     }
@@ -28,17 +28,17 @@ class MsgCommit extends Msg {
 class LogEntry {
     public TransactionID xid;
     public String data;
-    public HashMap<Long,byte[]> valores;
+    public Object valores;
     public PedidoID pedido;
 
     public LogEntry() {}
-    public LogEntry(TransactionID xid, String data, HashMap<Long, byte[]> valores) {
+    public LogEntry(TransactionID xid, String data, Object valores) {
         this.xid=xid;
         this.data=data;
         this.valores = valores;
     }
 
-    public LogEntry(TransactionID xid, String data, HashMap<Long, byte[]> valores, PedidoID p) {
+    public LogEntry(TransactionID xid, String data, Object valores, PedidoID p) {
         this.xid=xid;
         this.data=data;
         this.valores = valores;
@@ -47,11 +47,15 @@ class LogEntry {
 
     @Override
     public String toString() {
+        if(valores == null){
+            System.out.println("Valores é nulo!");
+        }
         String mapa = null;
         if(valores != null){
+            HashMap<Long,byte[]> val = (HashMap<Long,byte[]>)valores;
             mapa = "{";
 
-            for(Map.Entry<Long,byte[]> aux: valores.entrySet()){
+            for(Map.Entry<Long,byte[]> aux: val.entrySet()){
 
                 mapa += aux.getKey() + "=" + new String(aux.getValue(), StandardCharsets.UTF_8) + ",";
             }
@@ -60,7 +64,7 @@ class LogEntry {
         return "LogEntry{" +
                 "xid=" + xid +
                 ", data='" + data + '\'' +
-                ", valores=" + mapa +
+                ", valores=" + mapa  +
                 ", pedido=" + pedido +
                 '}';
     }
@@ -74,7 +78,7 @@ interface Pedido{
 class PedidoGet implements Pedido{
     public Collection<Long> keys;
     public boolean finalizado;
-    public HashMap<Long,byte[]> resultado;
+    public Object resultado;
     public String id;
 
     public PedidoGet ( Collection <Long> keys, String id) {
@@ -90,18 +94,18 @@ class PedidoGet implements Pedido{
 
     public void finaliza(Object res){
         finalizado = true;
-        resultado = (HashMap<Long,byte[]>)res;
+        resultado = res;
     }
 
 }
 
 class PedidoPut implements Pedido{
     public boolean finalizado = false;
-    public Map<Long,byte[]> valores;
+    public Object valores;
     public boolean resultado;
     public String id;
 
-    public PedidoPut(Map<Long, byte[]> valores, String id) {
+    public PedidoPut(Object valores, String id) {
         this.valores = valores;
         this.id = id;
     }

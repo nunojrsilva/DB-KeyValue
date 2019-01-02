@@ -11,6 +11,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 //mensagem para ser enviada!
 
@@ -45,6 +47,7 @@ class TransactionID{
         return Objects.hash(xid, coordenador);
     }
 }
+
 class Transaction{
     public TransactionID xid;
     public String resultado; //pode ser I; A ou C; F para o controlador
@@ -52,7 +55,7 @@ class Transaction{
 
     //Estas variaveis são para o Coodenador ... Criar uma class com extends?
     public HashSet<Address> quaisResponderam = new HashSet<>();
-    public HashMap<Address, HashMap<Long, byte[]>> participantes;
+    public HashMap<Address, Object> participantes; //pode-se mudar para ser modular
     //so podemos fazer commit quando o tamanho dos dois maps forem iguais!
     public CompletableFuture<Boolean> terminada = new CompletableFuture<Boolean>();
 
@@ -66,7 +69,7 @@ class Transaction{
 
     }
 
-    public Transaction(TransactionID xid, String resultado, HashMap<Address, HashMap<Long, byte[]>> participantes, PedidoID p) {
+    public Transaction(TransactionID xid, String resultado, HashMap<Address, Object> participantes, PedidoID p) {
         this.xid = xid;
         this.resultado = resultado;
         this.participantes = participantes;
@@ -112,6 +115,13 @@ public class TestLog {
             leLog(logP);
         }
     }
+
+    public HashMap<Long, byte[]> atualizaValores(HashMap<Long, byte[]> valores,HashMap<Long, byte[]> novos){
+
+        valores.putAll(novos);
+        return valores;
+    }
+
     public static void main(String[] args) {
 
         Address[] end = {
@@ -131,8 +141,46 @@ public class TestLog {
                     .withAddress(end[id])
                     .build();
             ms.start();
-            TwoPCControlador tpc = new TwoPCControlador(end, end[id], ms);
-            TwoPCParticipante tpp = new TwoPCParticipante(end, end[id], ms);
+            HashMap<Long,byte[]> val = new HashMap<>();
+
+            Function<HashMap<Address,Object>,Object> juntaValores = part -> {
+
+                HashMap<Long,byte[]> res = new HashMap<>();
+                for(Object o: part.values()){
+                    HashMap<Long,byte[]> a = (HashMap<Long,byte[]>)o;
+                    res.putAll(a);
+                }
+
+                return res;
+            };
+
+            Function<Object,HashMap<Address,Object>> participantesEnvolvidos = valoresInput -> {
+                HashMap<Address,Object> participantes = new HashMap<>();
+                HashMap<Long,byte[]> valores = (HashMap<Long,byte[]>)valoresInput;
+                for(Long aux : valores.keySet()){
+                    int resto = (int)(aux % (end.length)); //para já o coordenador n participa
+                    Object obj = participantes.get(end[resto]);
+                    HashMap<Long,byte[]> auxiliar = (HashMap<Long,byte[]>) obj;
+                    if(auxiliar == null){
+                        auxiliar = new HashMap<>();
+                    }
+                    auxiliar.put(aux,valores.get(aux));
+                    participantes.put(end[resto],auxiliar);
+                }
+                return participantes;
+            };
+
+            BiFunction<Object,Object,Object> atualizaValores = (antigos, novos) -> {
+
+                HashMap<Long,byte[]> valA = (HashMap<Long, byte[]>)antigos;
+                HashMap<Long,byte[]> valN = (HashMap<Long, byte[]>)novos;
+
+                valA.putAll(valN);
+                return valA;
+            };
+
+            TwoPCControlador tpc = new TwoPCControlador(end, end[id], ms,participantesEnvolvidos,juntaValores);
+            TwoPCParticipante tpp = new TwoPCParticipante(end, end[id], ms, val, atualizaValores);
 
         }
 

@@ -11,6 +11,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 class Lock{
     TransactionID xid;
@@ -40,7 +42,8 @@ class TwoPCParticipante extends TwoPC{
     /**
      * @valores Para guadar os pares chave-valor
      */
-    private HashMap<Long, byte[]> valores = new HashMap<>();
+    private Object valores; //podemos mudar para ser modular
+    private BiFunction<Object,Object,Object> atualizaValores; //funcao que atualiza os valores
     /**
      * Para o 2PL:
      * Uma variável que diz quem tem o lock atual
@@ -119,18 +122,25 @@ class TwoPCParticipante extends TwoPC{
             Msg paraMandar = new Msg(t.xid);
             switch (t.resultado) {
                 case ("P"):
-                    Lock l = new Lock(t.xid, lockID++);
-
-                    if(primeiroLock){
-                        primeiroLock=false;
-                        lockAtual = l;
+                    /*Lock l;
+                    if(lockAtual.xid.equals(t.xid)){
+                        l = lockAtual;
                     }
-                    filaLock.add(l);
+                    else{
+                        l = filaLock.stream().filter(aux -> aux.xid.equals(t.xid)).reduce(null,(a,b) -> b);
+                    }
 
+                    if(l == null){
+                        System.out.println("Lock é null!");
+                    }
+                    */
+                    Lock l = new Lock(t.xid,lockID++);
+                    filaLock.add(l);
                     l.obtido.thenAccept(v -> {
                         System.out.println("Posso enviar!");
                         enviaPrepared(paraMandar, Address.from(paraMandar.id.coordenador));
                     });
+
                     break;
                 case ("A"):
                     //PRECISO POR AQUI UM lockID++?????????
@@ -178,7 +188,7 @@ class TwoPCParticipante extends TwoPC{
 
             }
 
-            if(e.data.equals("P")){
+            /*if(e.data.equals("P")){
                 Lock aux = new Lock(t.xid,lockID++);
                 filaLock.add(aux);
             }
@@ -187,13 +197,17 @@ class TwoPCParticipante extends TwoPC{
                 filaLock.removeIf(lock -> (lock.xid.equals(e.xid)));
                 System.out.println("Depois de remover: " + filaLock.size());
             }
+            */
 
         }
+
+        analisaTransacaoParticipante();
+
         lockAtual = filaLock.pollFirst();
         if(lockAtual != null) {
             System.out.println("Lock atual: " + lockAtual.xid);
+            lockAtual.obtido.complete(null);
         }
-        analisaTransacaoParticipante();
 
     }
 
@@ -201,7 +215,8 @@ class TwoPCParticipante extends TwoPC{
 
 
 
-    public TwoPCParticipante(Address[] e, Address id, ManagedMessagingService ms){
+    public TwoPCParticipante(Address[] e, Address id, ManagedMessagingService ms, Object valores,
+                             BiFunction<Object,Object,Object> atualizaValores){
 
         super(e,id,ms);
 
@@ -213,6 +228,8 @@ class TwoPCParticipante extends TwoPC{
         readerLog = log.openReader(0);
         writerLog = log.writer();
 
+        this.valores = valores;
+        this.atualizaValores = atualizaValores;
 
 
         System.out.println("TamEnd: " + end.length);
@@ -357,16 +374,18 @@ class TwoPCParticipante extends TwoPC{
                      * --> Adicionar a transacao no hashmap
                      */
                     System.out.println("Vou guardar os valores para a transacao " + nova.id);
-                    for(Map.Entry<Long, byte[]> entry: nova.valores.entrySet()){
+                    /*for(Map.Entry<Long, byte[]> entry: nova.valores.entrySet()){
                         /**
                          * Senão tiver a key, entao devo de adicionar tudo
                          * Se ja tiver tenho de adicionar os novos valores de bytes ao array e ainda atualizar a transaction
                          */
-                        Long key = entry.getKey();
+                    /*    Long key = entry.getKey();
                         byte[] value = entry.getValue();
                         valores.put(key, value);
                     }
-                    writerLog.append(new LogEntry(nova.id, "C", valores));
+                    */
+                    this.valores = this.atualizaValores.apply(this.valores, nova.valores);
+                    writerLog.append(new LogEntry(nova.id, "C", this.valores));
 
                     Transaction t = transacoes.get(nova.id);
                     t.resultado = "C";
