@@ -3,10 +3,9 @@ import io.atomix.utils.serializer.Serializer;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+
 class Msg {
     TransactionID id;
     Object valores;
@@ -188,4 +187,16 @@ public class DBKeyValueProtocol {
     }
 
 
+}
+
+class ExcecaoGet extends Exception {
+
+    String idPedidoGet;
+    String erro;
+
+    public ExcecaoGet (String idpg) {
+        super();
+        this.idPedidoGet = idpg;
+        erro = "Pedido Get excedeu o tempo limite!\n";
+    }
 }

@@ -23,6 +23,7 @@ public class ClienteStub {
    private HashMap<String, CompletableFuture<Map<Long,byte[]>>> resultadoPedidosGet = new HashMap<>();
 
    public ClienteStub(ManagedMessagingService ms){
+
         this.ms = ms;
         //Participante part = new Participante();
         Address partEnd = Address.from("localhost:23451");
@@ -39,9 +40,9 @@ public class ClienteStub {
         int n = rand.nextInt(coordEnderecos.size());
         coordAtual = n;
 
-
         System.out.println("Novo clientstub! O coordenador atual é: " + coordEnderecos.get(coordAtual));
-        //inicializar Serializer
+
+
         this.ms.registerHandler("put", (a,m)->{
            //System.out.println("Está completo o pedido put!");
            PedidoPut rpp = s.decode(m);
@@ -98,27 +99,34 @@ public class ClienteStub {
                 },8, TimeUnit.SECONDS);
             }
         }
-        else {
-            //o mesmo para o get
-/*            PedidoGet pg = (PedidoGet) p;
 
-            if (pg.finalizado) {
-                resultadoPedidosGet.get(i).complete((Map<Long, byte[]>) pg.resultado);
-            }
-            else {
-                enviaMensagem(s.encode(pg), "get", ad);
-
-                //reenviar mensagem
-                es.schedule(() -> {
-                    verificaPedido(pg.id, ad);
-                },8, TimeUnit.SECONDS);
-
-            }*/
-        }
    }
+
+   //Fiz novo método para poder fazer throw de uma exceção
+
+    public void verificaPedidoGet(String i) throws ExcecaoGet{
+
+        System.out.println("Verificar pedidoGet!");
+
+        Pedido p = mapaPedidos.get(i);
+
+        if (p instanceof PedidoGet){
+
+            PedidoGet pp = (PedidoGet)p;
+
+            if(!pp.finalizado) {
+
+                throw new ExcecaoGet(pp.id);
+            }
+        }
+
+    }
+
+
 
     public CompletableFuture<Boolean> put(Map<Long,byte[]> values) {
         //
+
         System.out.println("-------Novo pedido put-------------");
         CompletableFuture<Boolean> res = new CompletableFuture<Boolean>();
         String idPedido = UUID.randomUUID().toString();
@@ -137,11 +145,12 @@ public class ClienteStub {
         return res;
     }
 
-    public CompletableFuture<Map<Long,byte[]>> get (Collection<Long> keys){
-       //depois implementamos estes!
+    public CompletableFuture<Map<Long,byte[]>> get (Collection<Long> keys) throws ExcecaoGet{
 
         CompletableFuture<Map <Long, byte[]>> res = new CompletableFuture<>();
+
         String idPedido = UUID.randomUUID().toString();
+
         PedidoGet pg = new PedidoGet(keys, idPedido);
 
         mapaPedidos.put(pg.id, pg);
@@ -150,9 +159,11 @@ public class ClienteStub {
 
         enviaMensagem(s.encode(pg), "get", coordEnderecos.get(coordAtual));
 
-        /*es.schedule(() -> {
-            verificaPedido(pg.id, coordEnderecos.get(coordAtual));
-        },8, TimeUnit.SECONDS);*/
+        es.scheduleWithFixedDelay(() -> {
+
+            verificaPedidoGet(pg.id);
+
+        },8,8, TimeUnit.SECONDS);
 
         coordAtual = (coordAtual + 1) % coordEnderecos.size();
         return res;

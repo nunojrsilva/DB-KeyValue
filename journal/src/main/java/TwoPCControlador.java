@@ -644,16 +644,22 @@ public class TwoPCControlador extends TwoPC{
             }
 
 
-           /* es.schedule(() -> {
+            es.schedule(() -> {
+
                 try {
-                    System.out.println("Passou tempo, vou verificar se pedido get esta finalizado");
-                    // Verificar se pedido esta completo, se não estiver deu asneira...
-                    System.out.println("Esta terminado o tempo de: " + );
-                } catch (Exception exc) {
+                    System.out.println("Passou tempo, vou devolver uma exceção");
+
+                    MsgGet msg = new MsgGet(pg.id, null);
+
+                    ms.sendAsync(a, "getExcecao", s.encode(msg));
+
+                }
+                catch (Exception exc) {
+
                     System.out.println(exc);
                 }
-                passouTempoTransacao(novaTransacao.xid);
-            }, TEMPOTRANSACAO, TimeUnit.SECONDS);*/
+
+            }, 20, TimeUnit.SECONDS);
 
         }, es);
 
