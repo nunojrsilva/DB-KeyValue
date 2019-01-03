@@ -221,6 +221,26 @@ class TwoPCParticipante extends TwoPC{
 
     }
 
+    private CompletableFuture<Void> enviaMensagemGet(MsgGet msgGet, String assunto, Address a){
+
+        System.out.println("Enviar mensagem com resposta ao get " + assunto + " a: " + a);
+
+        System.out.println("Vou enviar!");
+
+        byte [] m = s.encode(msgGet);
+
+        //return CompletableFuture.allOf(esperar).thenAccept(v -> {
+        try{
+            System.out.println("Vou mm tentar enviar");
+            return ms.sendAsync(a, assunto, m);
+        }
+        catch(Exception e){
+            System.out.println("Erro enviar mensagem: " + e); //podemos é por a remover
+        }
+        return CompletableFuture.completedFuture(null);
+        //});
+    }
+
 
 
 
@@ -425,6 +445,39 @@ class TwoPCParticipante extends TwoPC{
             //LIBERTAR LOCK
 
             enviaOk(paraMandar,Address.from(paraMandar.id.coordenador));
+
+
+        }, es);
+
+
+        ms.registerHandler("getCoordenador", (a,m) -> {
+
+
+            System.out.println("Sou o participante e recebi um pedido get");
+
+            MsgGet mg = s.decode(m);
+
+            // Mapa para devolver ao coordenador
+
+            Object val = new HashMap<>();
+
+
+            Collection <Long> chaves = (Collection<Long>) mg.valores;
+
+            // Pedir ao controlaParticipante os valores
+
+            val = this.valores.devolveValores(chaves);
+
+            System.out.println("Mapa val apos ser preenchido com valores : " + val.toString());
+
+
+            // Crio uma nova msgGet com o id do pedidoGet, os valores que me foram pedidos
+
+            MsgGet msgGet = new MsgGet(mg.idPedidoGet, val);
+
+            // Envio essa msgGet para o coordenador, que foi quem me enviou a mensagem
+
+            enviaMensagemGet (msgGet, "getResposta", a);
 
 
         }, es);

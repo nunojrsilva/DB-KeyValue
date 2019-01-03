@@ -100,13 +100,13 @@ public class ClienteStub {
         }
         else {
             //o mesmo para o get
-            /*PedidoGet pg = (PedidoGet) p;
+/*            PedidoGet pg = (PedidoGet) p;
 
             if (pg.finalizado) {
-                resultadoPedidosGet.get(i).complete(pg.resultado);
+                resultadoPedidosGet.get(i).complete((Map<Long, byte[]>) pg.resultado);
             }
             else {
-                enviaMensagem(s.encode(pg), "put", ad);
+                enviaMensagem(s.encode(pg), "get", ad);
 
                 //reenviar mensagem
                 es.schedule(() -> {
@@ -150,9 +150,9 @@ public class ClienteStub {
 
         enviaMensagem(s.encode(pg), "get", coordEnderecos.get(coordAtual));
 
-        es.schedule(() -> {
+        /*es.schedule(() -> {
             verificaPedido(pg.id, coordEnderecos.get(coordAtual));
-        },8, TimeUnit.SECONDS);
+        },8, TimeUnit.SECONDS);*/
 
         coordAtual = (coordAtual + 1) % coordEnderecos.size();
         return res;

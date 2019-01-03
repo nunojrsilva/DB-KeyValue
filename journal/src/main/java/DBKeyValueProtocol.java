@@ -3,6 +3,7 @@ import io.atomix.utils.serializer.Serializer;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -21,6 +22,20 @@ class MsgCommit extends Msg {
 
     public MsgCommit(TransactionID id, Object valores) {
         super(id,valores);
+        this.valores = valores;
+    }
+}
+
+//mensagem para ser enviada do coordenador para o participante e vice-versa durante um pedido get
+
+class MsgGet {
+
+    String idPedidoGet;
+    Object valores; // Coordenador -> Participante : Vai a collection de chaves , ao contrario vem a resposta
+
+    public MsgGet (String idPedidoGet, Object valores) {
+
+        this.idPedidoGet = idPedidoGet;
         this.valores = valores;
     }
 }
@@ -69,6 +84,38 @@ class LogEntry {
                 ", pedido=" + pedido +
                 '}';
     }
+}
+
+class GetGestao {
+    HashMap<Address, Object> valoresDevolver;
+    Collection <Address> participantes;
+    PedidoGet pg;
+    Address cliente;
+
+    public GetGestao(Collection<Address> participantes, PedidoGet pg, Address cliente) {
+        this.valoresDevolver = new HashMap<>();
+        this.participantes = participantes;
+        this.pg = pg;
+        this.cliente = cliente;
+    }
+
+    public void adicionaResposta (Address a, Object res) {
+
+        this.valoresDevolver.put(a, res);
+    }
+
+    public boolean finalizado () {
+
+        Collection <Address> jaResponderam = this.valoresDevolver.keySet();
+
+        for (Address a : participantes) {
+            if (!jaResponderam.contains(a))
+                return false;
+
+        }
+        return true;
+    }
+
 }
 
 interface Pedido{
@@ -134,7 +181,8 @@ public class DBKeyValueProtocol {
                         LogEntry.class,
                         Pedido.class,
                         PedidoGet.class,
-                        PedidoPut.class
+                        PedidoPut.class,
+                        MsgGet.class
                 )
                 .build();
     }

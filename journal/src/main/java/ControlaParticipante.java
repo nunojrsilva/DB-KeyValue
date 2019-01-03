@@ -7,19 +7,20 @@ import java.util.HashSet;
 
 public class ControlaParticipante implements InterfaceParticipante{
 
-    public HashMap<Long,byte[]> valores = new HashMap<>();
+    public HashMap<Long, byte[]> valores = new HashMap<>();
     public int lockId = 0;
 
     public ControlaParticipante(){
 
     }
 
-    public Object devolveValores(Object chavesInput, Object valoresInput) {
+    public Object devolveValores(Object chavesInput) {
+
         Collection<Long> chaves = (Collection<Long>)chavesInput;
-        HashMap<Long,byte[]> valores = (HashMap<Long, byte[]>)valoresInput;
 
         HashMap<Long,byte[]> res = new HashMap<>();
-        chaves.forEach(a -> res.put(a,valores.get(a)));
+
+        chaves.forEach(a -> res.put(a,this.valores.get(a)));
 
         return res;
     }

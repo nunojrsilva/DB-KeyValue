@@ -1,7 +1,7 @@
 import java.util.HashMap;
 public interface InterfaceParticipante {
 
-    public Object devolveValores(Object chavesInput, Object valoresInput);
+    public Object devolveValores(Object chavesInput);
 
     public Object atualizaValores(Object novos);
 
