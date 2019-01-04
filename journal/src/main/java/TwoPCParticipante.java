@@ -1,15 +1,11 @@
 import io.atomix.cluster.messaging.ManagedMessagingService;
-import io.atomix.cluster.messaging.impl.NettyMessagingService;
 import io.atomix.storage.journal.SegmentedJournal;
-import io.atomix.storage.journal.SegmentedJournalReader;
-import io.atomix.storage.journal.SegmentedJournalWriter;
 import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
 
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.function.BiFunction;
-import java.util.function.Function;
+import java.util.HashMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ScheduledExecutorService;
 
 class TwoPCParticipante extends TwoPC{
 
@@ -19,33 +15,13 @@ class TwoPCParticipante extends TwoPC{
      * @valores Para guadar os pares chave-valor
      */
     private InterfaceParticipante valores;
-    /*private Object valores; //podemos mudar para ser modular
-    private BiFunction<Object,Object,Object> atualizaValores; //funcao que atualiza os valores
 
-    private Function<Object,Object> devolveValores; //funcao que devolve valores consoante
-    */// a regra utilizada
     /**
      * Para o 2PL:
      * Uma variável que diz quem tem o lock atual
      * Uma lista de possiveis locks, já com uma ordem associada
      */
-    //private Lock lockAtual = null;
-    //private int lockID = 0;
-    /*private TreeSet<Lock> filaLock = new TreeSet<Lock>((o1, o2) -> {
 
-        Lock lock1 = (Lock) o1;
-        Lock lock2 = (Lock) o2;
-
-        if(lock1.lockID > lock2.lockID){
-            return 1;
-        }
-        if(lock1.lockID < lock2.lockID){
-            return -1;
-        }
-        return 0;
-
-        //return lock1.coordenador.toString().compareTo(lock2.coordenador.toString());
-    });*/
 
     private Locking lock;
 
@@ -77,31 +53,14 @@ class TwoPCParticipante extends TwoPC{
         return enviaMensagem(m,"abort",coord);
     }
 
-    /*private void libertaLock(){
-        /**
-         * Vou agora libertar o lock
-         */
-        /*lockAtual = filaLock.pollFirst();
-        System.out.println("Lock libertado!");
-        if(lockAtual != null){
-            System.out.println("Ja libertei o lock e vou avisar o seguinte!");
-            enviaPrepared(new Msg(lockAtual.xid), Address.from(lockAtual.xid.coordenador));
-        }
-    }*/
-
-    /**
-     * ATENCAO!!!
-     * Para nao dar confusao, eu mudei o nome de transacoes para transacoesANTIGA na variavel! Esta a cima em comentarios
-     */
     private void analisaTransacaoParticipante() {
-        boolean primeiroLock = true;
         //Resultados possiveis :
         for (Transaction t : transacoes.values()) {
             Msg paraMandar = new Msg(t.xid,null);
             switch (t.resultado) {
                 case ("P"):
 
-                    LockGlobal l = valores.novoLock(t.xid,t.participantes.get(meuEnd));//new LockGlobal(t.xid,lockID++);
+                    LockGlobal l = valores.novoLock(t.xid,t.participantes.get(meuEnd));
 
                     lock.lock(l)
                     .thenAccept(v -> {
@@ -245,19 +204,13 @@ class TwoPCParticipante extends TwoPC{
             System.out.println("Passei lock!");
 
             obtido.thenAccept(v -> {
-                //aqui podemos ver se ja n tem resposta sendo A
+
                 Msg paraMandar = new Msg(nova.id,null);
-                //Só depois de enviar o prepared é que eu vou fazer o lock, ou fazemos antes? Antes
+
                 System.out.println("Posso enviar prepared ao coordenador: " + nova.id.coordenador + "!\n\n");
                 enviaPrepared(paraMandar, Address.from(paraMandar.id.coordenador));
             });
-            /**
-             * Vou agora mandar a resposta para o coordenador
-             * ----> Não usei a mesma mensagem, porque posteriormente pode nos dar mais jeito para trabalhar com os varios coordenadores
-             * Mais uma vez tou a utilizar o end[0] que posteriormente poderá ser mudado
-             */
-            //Msg paraMandar = new Msg(nova.id);
-            //ms.sendAsync(end[0], assunto, s.encode(paraMandar));
+
             }catch(Exception excp){
                 System.out.println(excp);
             }
@@ -267,10 +220,7 @@ class TwoPCParticipante extends TwoPC{
         ms.registerHandler("abortCoordenador", (a,m)-> {
             Msg nova = s.decode(m);
 
-            /*System.out.println("SIZE da fila: " + filaLock.size());
-            filaLock.removeIf(l -> (l.xid.equals(nova.id)));
-            System.out.println("SIZE da fila depois: " + filaLock.size());
-            */
+
             LockGlobal auxL = valores.novoLock(nova.id,nova.valores);
             lock.unlock(auxL);
 

@@ -5,10 +5,8 @@ import io.atomix.storage.journal.SegmentedJournalWriter;
 import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 class Participante implements Comparable{

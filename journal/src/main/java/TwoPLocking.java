@@ -17,7 +17,7 @@ public class TwoPLocking implements Locking {
         }
         return 0;
 
-        //return lock1.coordenador.toString().compareTo(lock2.coordenador.toString());
+
     });
 
     @Override

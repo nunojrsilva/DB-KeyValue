@@ -1,18 +1,16 @@
-import io.atomix.utils.net.Address;
 import io.atomix.cluster.messaging.ManagedMessagingService;
-import io.atomix.cluster.messaging.impl.NettyMessagingService;
+import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
 
-import java.lang.reflect.Array;
-import java.time.Duration;
-
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 
 public class ClienteStub {
 
-   //private HashMap<Address, Participante> coordenadores = new HashMap<>();
    private ArrayList<Address> coordEnderecos = new ArrayList<>();
    private int coordAtual;
    private ManagedMessagingService ms;
@@ -25,13 +23,12 @@ public class ClienteStub {
    public ClienteStub(ManagedMessagingService ms){
 
         this.ms = ms;
-        //Participante part = new Participante();
+
         Address partEnd = Address.from("localhost:23451");
         Address partEnd2 = Address.from("localhost:23452");
         Address partEnd3 = Address.from("localhost:23453");
 
-       //part.endereco = partEnd;
-        //coordenadores.put(partEnd,part);
+
         coordEnderecos.add(partEnd);
         coordEnderecos.add(partEnd2);
         coordEnderecos.add(partEnd3);
@@ -128,7 +125,7 @@ public class ClienteStub {
         resultadoPedidos.put(pp.id, res);
 
         enviaMensagem(s.encode(pp), "put", coordEnderecos.get(coordAtual));
-        //ms.sendAsync(coordenadores.get(coordEnderecos.get(coordAtual)).endereco,"put", s.encode(pp));
+
         int auxCoordenador = coordAtual;
         es.schedule(() -> {
             verificaPedido(pp.id, coordEnderecos.get(auxCoordenador));

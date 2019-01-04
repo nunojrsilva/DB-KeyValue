@@ -1,18 +1,13 @@
-import io.atomix.cluster.messaging.ManagedMessagingService;
-import io.atomix.cluster.messaging.impl.NettyMessagingService;
 import io.atomix.storage.journal.SegmentedJournal;
 import io.atomix.storage.journal.SegmentedJournalReader;
-import io.atomix.storage.journal.SegmentedJournalWriter;
 import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
 
-import java.io.ByteArrayOutputStream;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.function.BiFunction;
-import java.util.function.Function;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.TreeSet;
+import java.util.concurrent.CompletableFuture;
 
 //mensagem para ser enviada!
 
@@ -136,83 +131,7 @@ public class TestLog {
             leLogs(end);
         }
         else {
-            /*ManagedMessagingService ms = NettyMessagingService.builder()
-                    .withAddress(end[id])
-                    .build();
-            ms.start();
-            HashMap<Long,byte[]> val = new HashMap<>();
-
-            Function<HashMap<Address,Object>,Object> juntaValores = part -> {
-
-                HashMap<Long,byte[]> res = new HashMap<>();
-                for(Object o: part.values()){
-                    HashMap<Long,byte[]> a = (HashMap<Long,byte[]>)o;
-                    res.putAll(a);
-                }
-
-                return res;
-            };
-
-            Function<Object,HashMap<Address,Object>> participantesEnvolvidos = valoresInput -> {
-                HashMap<Address,Object> participantes = new HashMap<>();
-                HashMap<Long,byte[]> valores = (HashMap<Long,byte[]>)valoresInput;
-                for(Long aux : valores.keySet()){
-                    int resto = (int)(aux % (end.length)); //para já o coordenador n participa
-                    Object obj = participantes.get(end[resto]);
-                    HashMap<Long,byte[]> auxiliar = (HashMap<Long,byte[]>) obj;
-                    if(auxiliar == null){
-                        auxiliar = new HashMap<>();
-                    }
-                    auxiliar.put(aux,valores.get(aux));
-                    participantes.put(end[resto],auxiliar);
-                }
-                return participantes;
-            };
-
-            BiFunction<Object,Object,Object> atualizaValores = (antigos, novos) -> {
-
-                HashMap<Long,byte[]> valA = (HashMap<Long, byte[]>)antigos;
-                HashMap<Long,byte[]> valN = (HashMap<Long, byte[]>)novos;
-
-                valA.putAll(valN);
-                return valA;
-            };
-
-            Function<Object,HashMap<Address,Object>> participantesGet = chavesInput -> {
-                HashMap<Address,Object> participantes = new HashMap<>();
-                Collection<Long> keys = (Collection<Long>)chavesInput;
-                for(Long aux : keys){
-                    int resto = (int)(aux % (end.length)); //para já o coordenador n participa
-                    Object obj = participantes.get(end[resto]);
-                    Collection<Long> auxiliar = (Collection<Long>) obj;
-                    if(auxiliar == null){
-                        auxiliar = new HashSet<>();
-                    }
-                    auxiliar.add(aux);
-                    participantes.put(end[resto],auxiliar);
-                }
-                return participantes;
-            };
-
-            BiFunction<Object,Object,Object> devolveValores = (chavesInput,valoresInp) -> {
-                Collection<Long> chaves = (Collection<Long>)chavesInput;
-                HashMap<Long,byte[]> valores = (HashMap<Long, byte[]>)valoresInp;
-
-                HashMap<Long,byte[]> res = new HashMap<>();
-                chaves.forEach(a -> res.put(a,valores.get(a)));
-
-                return res;
-            };
-           */
-            /*ControlaParticipante cp = new ControlaParticipante();
-            ControlaControlador cc = new ControlaControlador(end);
-            TwoPLocking locking = new TwoPLocking();
-            TwoPCControlador tpc = new TwoPCControlador(end, end[id], ms,
-                    DBKeyValueProtocol.newSerializer(),cc);//participantesEnvolvidos,juntaValores);
-            TwoPCParticipante tpp = new TwoPCParticipante(end, end[id], ms,
-                    DBKeyValueProtocol.newSerializer(),cp,locking);//val, atualizaValores);
-            */
-            Server s = new Server(end,end[id]);
+            Server s = new Server(end, end[id]);
         }
 
     }
