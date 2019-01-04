@@ -80,7 +80,6 @@ class Transaction{
             locksObtidos.add(part);
         }
 
-        System.out.println("Participantes: " + locksObtidos.size() + " para a trnasacao: " + xid);
         pedido = p;
     }
 }

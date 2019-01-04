@@ -1,7 +1,4 @@
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 public class TwoPLocking implements Locking {
@@ -26,6 +23,20 @@ public class TwoPLocking implements Locking {
     @Override
     public CompletableFuture<Void> lock(LockGlobal l) {
         System.out.println("Novo pedido de lock: " + l.xid + "! " + l.items());
+
+        if(locksAtuais.contains(l.xid)){
+            //se contiver um lock nos atuais retorna um completablefuture completo
+            return CompletableFuture.completedFuture(null);
+        }
+
+        for(LockGlobal laux: filaLock){
+            if(laux.xid.equals(l.xid)){
+                //entao ja tenho lock para aquela transacao
+                //retorno o completablefuture desse lock
+                return laux.obtido;
+            }
+        }
+
         if(Collections.disjoint(chavesLocked,(Collection<Long>)l.items())){
             chavesLocked.addAll((Collection<Long>)l.items());
             locksAtuais.add(l.xid);

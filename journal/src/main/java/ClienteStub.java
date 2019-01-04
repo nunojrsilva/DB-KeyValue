@@ -38,7 +38,7 @@ public class ClienteStub {
         Random rand = new Random();
 
         int n = rand.nextInt(coordEnderecos.size());
-        coordAtual = 2;//n;
+        coordAtual = n;
 
         System.out.println("Novo clientstub! O coordenador atual é: " + coordEnderecos.get(coordAtual));
 
@@ -63,13 +63,9 @@ public class ClienteStub {
    }
 
     private CompletableFuture<Void> enviaMensagem(byte[] m, String assunto, Address a){
-        System.out.println("Enviar " + assunto + " a: " + a);
-
-        System.out.println("Vou enviar!");
 
         //return CompletableFuture.allOf(esperar).thenAccept(v -> {
             try{
-                System.out.println("Vou mm tentar enviar");
                 return ms.sendAsync(a,assunto,m);
             }
             catch(Exception e){
@@ -81,7 +77,6 @@ public class ClienteStub {
 
 
     public void verificaPedido(String i, Address ad){
-        System.out.println("Verificar pedido!");
 
         Pedido p = mapaPedidos.get(i);
         if(p instanceof PedidoPut){
@@ -106,7 +101,6 @@ public class ClienteStub {
 
     public void verificaPedidoGet(String i) {
 
-        System.out.println("Verificar pedidoGet!");
 
         Pedido p = mapaPedidos.get(i);
 

@@ -11,27 +11,6 @@ import java.util.concurrent.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
-class Lock{
-    TransactionID xid;
-    int lockID;
-    CompletableFuture<Void> obtido = new CompletableFuture<>();
-
-    public Lock(TransactionID xid, int id) {
-        this.xid = xid;
-        lockID = id;
-    }
-
-    public boolean equals(Object o){
-        if(o == null || !(o instanceof Lock)){
-            return false;
-        }
-
-        Lock al = (Lock)o;
-
-        return this.xid.equals(al.xid);
-    }
-}
-
 class TwoPCParticipante extends TwoPC{
 
     private HashMap<TransactionID, Transaction> transacoes = new HashMap<>();
@@ -70,16 +49,10 @@ class TwoPCParticipante extends TwoPC{
 
     private Locking lock;
 
-    private BiFunction<TransactionID,Integer,LockGlobal> criaLock;
-
     private CompletableFuture<Void> enviaMensagem(Msg m, String assunto, Address a){
-        System.out.println("Enviar " + assunto + " a: " + a);
-
-        System.out.println("Vou enviar!");
 
         //return CompletableFuture.allOf(esperar).thenAccept(v -> {
         try{
-            System.out.println("Vou mm tentar enviar");
             return ms.sendAsync(a,assunto,s.encode(m));
         }
         catch(Exception e){
@@ -127,29 +100,16 @@ class TwoPCParticipante extends TwoPC{
             Msg paraMandar = new Msg(t.xid,null);
             switch (t.resultado) {
                 case ("P"):
-                    /*Lock l;
-                    if(lockAtual.xid.equals(t.xid)){
-                        l = lockAtual;
-                    }
-                    else{
-                        l = filaLock.stream().filter(aux -> aux.xid.equals(t.xid)).reduce(null,(a,b) -> b);
-                    }
 
-                    if(l == null){
-                        System.out.println("Lock é null!");
-                    }
-                    */
                     LockGlobal l = valores.novoLock(t.xid,t.participantes.get(meuEnd));//new LockGlobal(t.xid,lockID++);
 
-                    lock.lock(l);//filaLock.add(l);
-                    l.obtido.thenAccept(v -> {
-                        System.out.println("Posso enviar!");
+                    lock.lock(l)
+                    .thenAccept(v -> {
                         enviaPrepared(paraMandar, Address.from(paraMandar.id.coordenador));
                     });
 
                     break;
                 case ("A"):
-                    //PRECISO POR AQUI UM lockID++?????????
                     enviaAbort(paraMandar,Address.from(paraMandar.id.coordenador));
                     break;
 
@@ -162,21 +122,19 @@ class TwoPCParticipante extends TwoPC{
 
 
     public void recuperaLogParticipante(){
-        System.out.println("Recupera Part");
 
         while(readerLog.hasNext()) {
 
             // Leitura do log
             LogEntry e = (LogEntry) readerLog.next().entry();
 
-            System.out.println(e.toString());
 
             Transaction t = transacoes.get(e.xid);
 
             if (t == null) {
 
                 if (e.data.equals("C"))
-                    valores.atualizaValores(e.valores);//valores = e.valores;
+                    valores.atualizaValores(e.valores);
 
                 HashMap<Address,Object> valoresEnd = new HashMap<>();
                 valoresEnd.put(meuEnd,e.valores);
@@ -191,30 +149,13 @@ class TwoPCParticipante extends TwoPC{
                 //Altera o resultado
                 t.resultado = e.data;
                 if (e.data.equals("C"))
-                    valores.atualizaValores(e.valores);//valores = e.valores;
+                    valores.atualizaValores(e.valores);
 
             }
-
-            /*if(e.data.equals("P")){
-                Lock aux = new Lock(t.xid,lockID++);
-                filaLock.add(aux);
-            }
-            else{
-                System.out.println("Antes de remover: " + filaLock.size());
-                filaLock.removeIf(lock -> (lock.xid.equals(e.xid)));
-                System.out.println("Depois de remover: " + filaLock.size());
-            }
-            */
 
         }
 
         analisaTransacaoParticipante();
-
-        /*lockAtual = filaLock.pollFirst();
-        if(lockAtual != null) {
-            System.out.println("Lock atual: " + lockAtual.xid);
-            lockAtual.obtido.complete(null);
-        }*/
 
     }
 
@@ -226,7 +167,6 @@ class TwoPCParticipante extends TwoPC{
 
         byte [] m = s.encode(msgGet);
 
-        //return CompletableFuture.allOf(esperar).thenAccept(v -> {
         try{
             System.out.println("Vou mm tentar enviar");
             return ms.sendAsync(a, assunto, m);
@@ -235,7 +175,7 @@ class TwoPCParticipante extends TwoPC{
             System.out.println("Erro enviar mensagem: " + e); //podemos é por a remover
         }
         return CompletableFuture.completedFuture(null);
-        //});
+
     }
 
 
@@ -258,45 +198,39 @@ class TwoPCParticipante extends TwoPC{
 
         this.valores = valores;
         this.lock = lockA;
-        //this.atualizaValores = atualizaValores;
 
-
-        System.out.println("TamEnd: " + end.length);
+        //System.out.println("TamEnd: " + end.length);
 
         recuperaLogParticipante();
 
         ms.registerHandler("preparedCoordenador", (a,m)-> {
-            System.out.println("Recebi prepared no participante!");
             try{
                 Msg nova = s.decode(m);
 
 
             /**
-             * Vou verificar primeiro se já recebi uma resposta para este notificação, se sim tenho de dar a mesma
+             * Vou verificar primeiro se já recebi uma resposta para este notificação,
+             * se sim tenho de dar a mesma
              */
             if(transacoes.containsKey(nova.id) &&
                     !transacoes.get(nova.id).resultado.equals("P")){
                 System.out.println("Ja tenho esta transacao!Decidir o que fazer com o lock!");
                 Msg paraMandar = new Msg(nova.id,null);
 
-                //Para já vou deixar end[0], mas depois o coordenador poderá ser outro ...
                 String resultado = transacoes.get(nova.id).resultado;
                 switch (resultado){
-                    case "A":
+                    case "A": //o resultado so pode ser abort
                         enviaAbort(paraMandar,Address.from(paraMandar.id.coordenador));
                         break;
                 }
                 return;
             }
-
-
-
             String assunto = "prepared";
 
             /**
              * Vou guardar a minha decisão no Log "P" <- Estou pronto para iniciar
              * Vou criar uma nova entrada na transacao
-             */
+             * */
             if(!transacoes.containsKey(nova.id)){
                 writerLog.append(new LogEntry(nova.id, "P", nova.valores));
 
@@ -305,34 +239,12 @@ class TwoPCParticipante extends TwoPC{
 
             }
 
-            /*Lock meuLock = new Lock(nova.id,lockID++);
-
-            if(lockAtual == null){
-                //posso mandar e adquiro lock
-                System.out.println("Lock atual é null!");
-                //NECESSARIO GUARDAR NO LOG?
-                lockAtual = meuLock;
-                lockAtual.obtido.complete(null);
-
-            }
-
-            else{
-                if(lockAtual.equals(meuLock)){
-                    //posso mandar
-                    lockAtual.obtido.complete(null);
-                }
-
-                else{
-                    //senao adiciono à fila
-                    filaLock.add(meuLock);
-                }
-            }*/
             LockGlobal meuLock = valores.novoLock(nova.id,nova.valores);
-            lock.lock(meuLock);
+            CompletableFuture<Void> obtido = lock.lock(meuLock);
 
             System.out.println("Passei lock!");
 
-            meuLock.obtido.thenAccept(v -> {
+            obtido.thenAccept(v -> {
                 //aqui podemos ver se ja n tem resposta sendo A
                 Msg paraMandar = new Msg(nova.id,null);
                 //Só depois de enviar o prepared é que eu vou fazer o lock, ou fazemos antes? Antes
@@ -353,7 +265,6 @@ class TwoPCParticipante extends TwoPC{
         }, es);
 
         ms.registerHandler("abortCoordenador", (a,m)-> {
-            System.out.println("Recebi abort!");
             Msg nova = s.decode(m);
 
             /*System.out.println("SIZE da fila: " + filaLock.size());
@@ -371,9 +282,8 @@ class TwoPCParticipante extends TwoPC{
                  * Para o abort se ja tiver um abort ignoramos, senão tenho de guardar o resultado
                  */
                 if(transacoes.get(nova.id).resultado.equals("A")){
-                    System.out.println("Já recebi uma mensagem de abort para a transacao " + nova.id);
+
                 }else {
-                    System.out.println("Vou abortar a transacao " + nova.id);
                     writerLog.append(new LogEntry(nova.id, "A", null));
                     Transaction t = transacoes.get(nova.id);
                     t.resultado = "F";
@@ -382,20 +292,13 @@ class TwoPCParticipante extends TwoPC{
             }
 
             Msg paraMandar = new Msg(nova.id,null);
-
-            System.out.println("Vou enviar ok no abort!");
             //LIBERTAR LOCK
-            /*if((lockAtual != null) && (lockAtual.xid.equals(nova.id))) {
-                System.out.println("Sou eu que tenho o lock!");
-                libertaLock();
-            }*/
             enviaOk(paraMandar,Address.from(paraMandar.id.coordenador));
 
 
         }, es);
 
         ms.registerHandler("commitCoordenador", (a,m)-> {
-            System.out.println("Recebi commit!");
             MsgCommit nova = s.decode(m);
 
             if(transacoes.containsKey(nova.id) == false){
@@ -403,30 +306,21 @@ class TwoPCParticipante extends TwoPC{
             }
             else{
                 /**
-                 * Primeiro verifico se já não guardei a
+                 * Primeiro verifico se já não guardei a transacao
                  */
                 if(transacoes.get(nova.id).resultado.equals("C")){
                     //se ja tem resposta, responde e n faz nada
-                    System.out.println("Já tinha os valores referentes à transacao " + nova.id);
                 }else {
                     /**
                      * Tarefas:
-                     * --> Guardar o resultado no log
                      * --> Guardar os valores
+                     * --> Guardar o resultado no log
                      * --> Adicionar a transacao no hashmap
+                     * --> Libertar o lock
                      */
                     System.out.println("Vou guardar os valores para a transacao " + nova.id);
-                    /*for(Map.Entry<Long, byte[]> entry: nova.valores.entrySet()){
-                        /**
-                         * Senão tiver a key, entao devo de adicionar tudo
-                         * Se ja tiver tenho de adicionar os novos valores de bytes ao array e ainda atualizar a transaction
-                         */
-                    /*    Long key = entry.getKey();
-                        byte[] value = entry.getValue();
-                        valores.put(key, value);
-                    }
-                    */
-                    this.valores.atualizaValores(nova.valores);//this.valores = this.atualizaValores.apply(this.valores, nova.valores);
+
+                    this.valores.atualizaValores(nova.valores);
                     writerLog.append(new LogEntry(nova.id, "C", this.valores.getValores()));
 
                     Transaction t = transacoes.get(nova.id);
@@ -434,12 +328,11 @@ class TwoPCParticipante extends TwoPC{
                     transacoes.put(nova.id, t);
                     LockGlobal lockAux = valores.novoLock(t.xid,nova.valores);
                     lock.unlock(lockAux);
-                    //libertaLock();
+
                 }
             }
 
             Msg paraMandar = new Msg(nova.id,null);
-            System.out.println("Vou enviar ok no commit");
             //LIBERTAR LOCK
 
             enviaOk(paraMandar,Address.from(paraMandar.id.coordenador));

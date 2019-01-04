@@ -67,6 +67,7 @@ class LogEntry {
         }
         String mapa = null;
         if(valores != null){
+            //apenas para ler os logs, senao como e object n funcionava
             HashMap<Long,byte[]> val = (HashMap<Long,byte[]>)valores;
             mapa = "{";
 

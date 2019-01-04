@@ -33,16 +33,14 @@ public class Server {
 
 
 
-        System.out.println("Enviar mensagem com pedido get, assunto : " + assunto + " a: " + a);
 
 
         //return CompletableFuture.allOf(esperar).thenAccept(v -> {
         try{
-            System.out.println("Vou mm tentar enviar");
             return ms.sendAsync(a, assunto, s.encode(msgGet));
         }
         catch(Exception e){
-            System.out.println("Erro enviar mensagem: " + e); //podemos é por a remover
+
         }
         return CompletableFuture.completedFuture(null);
         //});
@@ -50,30 +48,20 @@ public class Server {
 
     public void registaHandlersCoordenador(){
         ms.registerHandler("put", (a,m) -> {
-            System.out.println("Recebi put!");
             PedidoPut pp = s.decode(m);
             PedidoID pi = new PedidoID(a, pp.id);
-            System.out.println("Vou ver se existe!");
-            try{
-                System.out.println(controlador.pedidos);
-            }
-            catch(Exception ec){
-                System.out.println(ec);
-            }
+
             try {
                 for (Map.Entry<PedidoID, TransactionID> mePi : controlador.pedidos.entrySet()) {
                     //System.out.println("Pedido: " + mePi.getValue());
                     if (mePi.getKey().equals(pi)) {
-                        System.out.println("Pedido já existe! Decidir o que temos de fazer");
                         controlador.transacoes.get(mePi.getValue()).terminada
                                 .thenAccept(res -> {
-                                    System.out.println("Terminada, posso mandar resultado!");
                                     pp.resultado = res;
                                     pp.finalizado = true;
-                                    System.out.println("Enviar a: " + a);
                                     byte[] auxPut = s.encode(pp);
                                     ms.sendAsync(a, "put", auxPut);
-                                    System.out.println("Enviei resposta!");
+
                                 });
                         return;
                     }
@@ -82,19 +70,14 @@ public class Server {
                 }
 
 
-                System.out.println("Nao existe!");
-
-                System.out.println("Vou terminar");
                 controlador.iniciaTransacao(a, pp.id, pp.valores)
                         .thenAccept(res -> {
-                            System.out.println("Terminada, posso mandar resultado!");
                             pp.resultado = res;
                             pp.finalizado = true;
-                            System.out.println("Enviar a: " + a);
                             byte[] auxPut = s.encode(pp);
 
                             ms.sendAsync(a, "put", auxPut);
-                            System.out.println("Enviei resposta!");
+
                         });
 
             }catch(Exception exc) {
@@ -105,7 +88,6 @@ public class Server {
 
         ms.registerHandler("get", (a, m) -> {
 
-            System.out.println("Sou o controlador e recebi pedido get vindo do stub");
 
             PedidoGet pg = s.decode(m);
 
@@ -119,13 +101,9 @@ public class Server {
 
             this.pedidosGetExecucao.put(pg.id, g);
 
-            System.out.println("Já dividi as chaves, vou enviar para cada um dos participantes");
-
-            System.out.println(divisao.size());
 
             for (Address ad : divisao.keySet()) {
 
-                System.out.println("Enviar mensagem get a " + ad);
 
                 Object collectionRespetiva = divisao.get(ad);
 
@@ -139,7 +117,6 @@ public class Server {
             esControlador.schedule(() -> {
 
                 try {
-                    System.out.println("Passou tempo, vou devolver uma exceção");
 
                     MsgGet msg = new MsgGet(pg.id, null);
 
@@ -158,13 +135,10 @@ public class Server {
 
         ms.registerHandler("getResposta", (a, m) -> {
 
-            System.out.println("Sou o controlador e recebi resposta ao pedido get");
 
             MsgGet mg = s.decode(m);
 
             GetGestao g = this.pedidosGetExecucao.get(mg.idPedidoGet);
-
-            System.out.println("Resposta : " + mg.valores);
 
             g.adicionaResposta(a, mg.valores);
 
@@ -191,7 +165,6 @@ public class Server {
         ms.registerHandler("getCoordenador", (a,m) -> {
 
 
-            System.out.println("Sou o participante e recebi um pedido get");
 
             MsgGet mg = s.decode(m);
 
@@ -206,7 +179,6 @@ public class Server {
 
             val = this.interfaceParticipante.devolveValores(chaves);
 
-            System.out.println("Mapa val apos ser preenchido com valores : " + val.toString());
 
 
             // Crio uma nova msgGet com o id do pedidoGet, os valores que me foram pedidos
