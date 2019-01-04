@@ -137,7 +137,7 @@ public class TestLog {
             leLogs(end);
         }
         else {
-            ManagedMessagingService ms = NettyMessagingService.builder()
+            /*ManagedMessagingService ms = NettyMessagingService.builder()
                     .withAddress(end[id])
                     .build();
             ms.start();
@@ -204,15 +204,16 @@ public class TestLog {
 
                 return res;
             };
-
-            ControlaParticipante cp = new ControlaParticipante();
+           */
+            /*ControlaParticipante cp = new ControlaParticipante();
             ControlaControlador cc = new ControlaControlador(end);
             TwoPLocking locking = new TwoPLocking();
             TwoPCControlador tpc = new TwoPCControlador(end, end[id], ms,
                     DBKeyValueProtocol.newSerializer(),cc);//participantesEnvolvidos,juntaValores);
             TwoPCParticipante tpp = new TwoPCParticipante(end, end[id], ms,
                     DBKeyValueProtocol.newSerializer(),cp,locking);//val, atualizaValores);
-
+            */
+            Server s = new Server(end,end[id]);
         }
 
     }

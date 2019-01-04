@@ -34,7 +34,8 @@ public class TwoPC {
     ScheduledExecutorService es;
     HashMap<Address,Participante> participantes = new HashMap<Address,Participante>();
 
-    public TwoPC(Address[] end, Address meuID, ManagedMessagingService ms, Serializer ser) {
+    public TwoPC(Address[] end, Address meuID, ManagedMessagingService ms, Serializer ser,
+                 ScheduledExecutorService ses) {
         this.end = end;
         this.meuEnd = meuID;
         this.ms = ms;
@@ -46,7 +47,7 @@ public class TwoPC {
 
         s = ser;//DBKeyValueProtocol.newSerializer();
 
-        es = Executors.newSingleThreadScheduledExecutor();
+        es = ses;//Executors.newSingleThreadScheduledExecutor();
 
     }
 }

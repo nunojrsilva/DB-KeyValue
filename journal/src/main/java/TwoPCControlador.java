@@ -44,13 +44,12 @@ public class TwoPCControlador extends TwoPC{
     private final int TEMPOTRANSACAO = 20;
 
 
-    private HashMap<TransactionID, Transaction> transacoes = new HashMap<>();
-    private HashMap<PedidoID,TransactionID> pedidos = new HashMap<>();
+    public HashMap<TransactionID, Transaction> transacoes = new HashMap<>();
+    public HashMap<PedidoID,TransactionID> pedidos = new HashMap<>();
+
     private int xid;
 
     private InterfaceControlador controla;
-
-    private HashMap<String, GetGestao> pedidosGetExecucao = new HashMap<>();
 
     private void adicionaLock(Address a, Transaction t){
 
@@ -72,25 +71,6 @@ public class TwoPCControlador extends TwoPC{
         try{
             System.out.println("Vou mm tentar enviar");
             return ms.sendAsync(a,assunto,s.encode(m));
-        }
-        catch(Exception e){
-            System.out.println("Erro enviar mensagem: " + e); //podemos é por a remover
-        }
-        return CompletableFuture.completedFuture(null);
-        //});
-    }
-
-    private CompletableFuture<Void> enviaMensagemGet(MsgGet msgGet, String assunto, Address a){
-
-
-
-        System.out.println("Enviar mensagem com pedido get, assunto : " + assunto + " a: " + a);
-
-
-        //return CompletableFuture.allOf(esperar).thenAccept(v -> {
-        try{
-            System.out.println("Vou mm tentar enviar");
-            return ms.sendAsync(a, assunto, s.encode(msgGet));
         }
         catch(Exception e){
             System.out.println("Erro enviar mensagem: " + e); //podemos é por a remover
@@ -352,10 +332,64 @@ public class TwoPCControlador extends TwoPC{
 
     }
 
+    public CompletableFuture<Boolean> iniciaTransacao(Address a, String ppid, Object ppvalores){
+
+        System.out.println("Recebi put");
+
+        //PedidoPut pp = s.decode(m);
+
+        PedidoID pi = new PedidoID(a, ppid);
+
+        //HashMap<Long, byte[]> valores = new HashMap<>(pp.valores);
+        TransactionID newXid = new TransactionID(++xid, meuEnd.toString());
+
+        writerLog.append(new LogEntry(newXid, "I", ppvalores, pi));
+        pedidos.put(pi, newXid);
+
+        System.out.println("Vou mandar!");
+
+        //mandar mensagem para todos para iniciar transacao
+        Msg paraMandar = new Msg(newXid, null);
+        HashMap<Address, Object> participantes = controla.distribuiPorParticipante(ppvalores);//distribuiPorParticipante.apply(pp.valores);
+        Transaction novaTransacao = new Transaction(newXid, "I", participantes, pi);
+        novaTransacao.terminada = new CompletableFuture<Boolean>();
+        transacoes.put(newXid, novaTransacao);
+
+        enviaPrepared(paraMandar, novaTransacao); //depois aqui vai ter thenQQCoisa
+
+
+        es.schedule(() -> {
+            try {
+                System.out.println("Passou tempo");
+                System.out.println("Esta terminado o tempo de: " + paraMandar.id);
+            } catch (Exception exc) {
+                System.out.println(exc);
+            }
+            passouTempoTransacao(novaTransacao.xid);
+        }, TEMPOTRANSACAO, TimeUnit.SECONDS);
+
+        /*
+        System.out.println("Vou terminar");
+        novaTransacao.terminada
+                .thenAccept(res -> {
+                    System.out.println("Terminada, posso mandar resultado!");
+                    pp.resultado = res;
+                    pp.finalizado = true;
+                    System.out.println("Enviar a: " + a);
+                    byte[] auxPut = s.encode(pp);
+
+                    ms.sendAsync(a, "put", auxPut);
+                    System.out.println("Enviei resposta!");
+                });
+        */
+        return novaTransacao.terminada;
+    }
+
+
 
     public TwoPCControlador(Address[] e, Address id, ManagedMessagingService ms,
-                            Serializer ser, InterfaceControlador ic) {
-        super(e, id, ms, ser);
+                            Serializer ser, InterfaceControlador ic, ScheduledExecutorService ses) {
+        super(e, id, ms, ser, ses);
 
         log = SegmentedJournal.builder()
                 .withName("exemploIDCoordenador" + this.meuEnd)
@@ -532,166 +566,6 @@ public class TwoPCControlador extends TwoPC{
             }
         }, es);
 
-        ms.registerHandler("put", (a, m) -> {
-
-            System.out.println("Recebi put");
-
-            PedidoPut pp = s.decode(m);
-
-            PedidoID pi = new PedidoID(a, pp.id);
-
-
-            for (Map.Entry<PedidoID, TransactionID> mePi : pedidos.entrySet()) {
-
-                if (mePi.getKey().equals(pi)) {
-                    System.out.println("Pedido já existe! Decidir o que temos de fazer");
-                    transacoes.get(mePi.getValue()).terminada
-                            .thenAccept(res -> {
-                                System.out.println("Terminada, posso mandar resultado!");
-                                pp.resultado = res;
-                                pp.finalizado = true;
-                                System.out.println("Enviar a: " + a);
-                                byte[] auxPut = s.encode(pp);
-                                ms.sendAsync(a, "put", auxPut);
-                                System.out.println("Enviei resposta!");
-                            });
-                    return;
-                }
-
-            }
-
-            System.out.println("Nao existe!");
-            try {
-
-                //HashMap<Long, byte[]> valores = new HashMap<>(pp.valores);
-                TransactionID newXid = new TransactionID(++xid, meuEnd.toString());
-
-                writerLog.append(new LogEntry(newXid, "I", pp.valores, pi));
-                pedidos.put(pi, newXid);
-
-                System.out.println("Vou mandar!");
-
-                //mandar mensagem para todos para iniciar transacao
-                Msg paraMandar = new Msg(newXid, null);
-                HashMap<Address, Object> participantes = controla.distribuiPorParticipante(pp.valores);//distribuiPorParticipante.apply(pp.valores);
-                Transaction novaTransacao = new Transaction(newXid, "I", participantes, pi);
-                novaTransacao.terminada = new CompletableFuture<Boolean>();
-                transacoes.put(newXid, novaTransacao);
-
-                enviaPrepared(paraMandar, novaTransacao); //depois aqui vai ter thenQQCoisa
-
-
-                es.schedule(() -> {
-                    try {
-                        System.out.println("Passou tempo");
-                        System.out.println("Esta terminado o tempo de: " + paraMandar.id);
-                    } catch (Exception exc) {
-                        System.out.println(exc);
-                    }
-                    passouTempoTransacao(novaTransacao.xid);
-                }, TEMPOTRANSACAO, TimeUnit.SECONDS);
-
-                System.out.println("Vou terminar");
-                novaTransacao.terminada
-                        .thenAccept(res -> {
-                            System.out.println("Terminada, posso mandar resultado!");
-                            pp.resultado = res;
-                            pp.finalizado = true;
-                            System.out.println("Enviar a: " + a);
-                            byte[] auxPut = s.encode(pp);
-
-                            ms.sendAsync(a, "put", auxPut);
-                            System.out.println("Enviei resposta!");
-                        });
-            } catch (Exception exc) {
-                System.out.println("Exc: " + exc);
-            }
-
-        }, es);
-
-        // ------- PEDIDOS GET ------//
-
-        ms.registerHandler("get", (a, m) -> {
-
-            System.out.println("Sou o controlador e recebi pedido get vindo do stub");
-
-            PedidoGet pg = s.decode(m);
-
-            HashMap<Address, Object> divisao = this.controla.participantesGet(pg.keys);
-
-            // Classe para gestão interna dos pedidos get por parte do coordenador
-
-            GetGestao g = new GetGestao(divisao.keySet(), pg, a);
-
-            // Coloquei o pedido get no estado do controlador
-
-            this.pedidosGetExecucao.put(pg.id, g);
-
-            System.out.println("Já dividi as chaves, vou enviar para cada um dos participantes");
-
-            System.out.println(divisao.size());
-
-            for (Address ad : divisao.keySet()) {
-
-                System.out.println("Enviar mensagem get a " + ad);
-
-                Object collectionRespetiva = divisao.get(ad);
-
-                MsgGet msg = new MsgGet(pg.id, collectionRespetiva);
-
-                enviaMensagemGet(msg, "getCoordenador", ad);
-
-            }
-
-
-            es.schedule(() -> {
-
-                try {
-                    System.out.println("Passou tempo, vou devolver uma exceção");
-
-                    MsgGet msg = new MsgGet(pg.id, null);
-
-                    ms.sendAsync(a, "getExcecao", s.encode(msg));
-
-                }
-                catch (Exception exc) {
-
-                    System.out.println(exc);
-                }
-
-            }, 20, TimeUnit.SECONDS);
-
-        }, es);
-
-
-        ms.registerHandler("getResposta", (a, m) -> {
-
-            System.out.println("Sou o controlador e recebi resposta ao pedido get");
-
-            MsgGet mg = s.decode(m);
-
-            GetGestao g = this.pedidosGetExecucao.get(mg.idPedidoGet);
-
-            System.out.println("Resposta : " + mg.valores);
-
-            g.adicionaResposta(a, mg.valores);
-
-            if (g.finalizado()) {
-
-                Object o = this.controla.juntaValores(g.valoresDevolver);
-
-                g.pg.resultado = o;
-
-                // Avisar o cliente que o pedido está concluído
-                // Devo encapsular isto numa função?
-
-                ms.sendAsync(g.cliente, "get", s.encode(g.pg));
-
-            }
-
-
-
-        }, es);
 
     }
 

@@ -38,7 +38,7 @@ public class ClienteStub {
         Random rand = new Random();
 
         int n = rand.nextInt(coordEnderecos.size());
-        coordAtual = n;
+        coordAtual = 2;//n;
 
         System.out.println("Novo clientstub! O coordenador atual é: " + coordEnderecos.get(coordAtual));
 
@@ -104,7 +104,7 @@ public class ClienteStub {
 
    //Fiz novo método para poder fazer throw de uma exceção
 
-    public void verificaPedidoGet(String i) throws ExcecaoGet{
+    public void verificaPedidoGet(String i) {
 
         System.out.println("Verificar pedidoGet!");
 
@@ -116,10 +116,9 @@ public class ClienteStub {
 
             if(!pp.finalizado) {
 
-                throw new ExcecaoGet(pp.id);
+                resultadoPedidosGet.get(pp.id).completeExceptionally(new ExcecaoGet(pp.id));
             }
         }
-
     }
 
 
@@ -145,9 +144,9 @@ public class ClienteStub {
         return res;
     }
 
-    public CompletableFuture<Map<Long,byte[]>> get (Collection<Long> keys) throws ExcecaoGet{
+    public CompletableFuture<Map<Long,byte[]>> get (Collection<Long> keys){
 
-        CompletableFuture<Map <Long, byte[]>> res = new CompletableFuture<>();
+        CompletableFuture<Map<Long, byte[]>> res = new CompletableFuture<>();
 
         String idPedido = UUID.randomUUID().toString();
 
@@ -159,15 +158,14 @@ public class ClienteStub {
 
         enviaMensagem(s.encode(pg), "get", coordEnderecos.get(coordAtual));
 
-        es.scheduleWithFixedDelay(() -> {
+        es.schedule(() -> {
 
             verificaPedidoGet(pg.id);
 
-        },8,8, TimeUnit.SECONDS);
+        }, 8, TimeUnit.SECONDS);
 
         coordAtual = (coordAtual + 1) % coordEnderecos.size();
         return res;
-
     }
 
 }

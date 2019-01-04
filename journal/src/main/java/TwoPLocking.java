@@ -31,22 +31,33 @@ public class TwoPLocking implements Locking {
             locksAtuais.add(l.xid);
             l.obtido.complete(null);
         }
+        else{
+            System.out.println("Vai para a fila!");
+            filaLock.add(l);
+        }
         return l.obtido;
     }
 
     @Override
     public void unlock(LockGlobal l) {
+        System.out.println("Novo pedido de unlock!");
         if(!locksAtuais.contains(l.xid)){
+            System.out.println("Lock nao se encontra nos atuais!");
             filaLock.removeIf(lock -> (lock.xid.equals(l.xid)));
             return;
         }
+        System.out.println("Chaves antes unlock: " + chavesLocked);
         chavesLocked.removeAll((Collection<Long>)l.items());
+        System.out.println("Chaves depois unlock: " + chavesLocked);
 
         ArrayList<LockGlobal> auxiliar = new ArrayList<>();
+
+        System.out.println("Fila no unlock: " + filaLock);
 
         for(LockGlobal aux: filaLock){
             if(Collections.disjoint(chavesLocked,(Collection<Long>)aux.items())){
                 chavesLocked.addAll((Collection<Long>)aux.items());
+                System.out.println("Completar lock em fila: " + aux.xid);
                 aux.obtido.complete(null);
                 auxiliar.add(aux);
                 locksAtuais.add(aux.xid);

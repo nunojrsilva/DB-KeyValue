@@ -7,10 +7,7 @@ import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
 
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -246,9 +243,10 @@ class TwoPCParticipante extends TwoPC{
 
 
     public TwoPCParticipante(Address[] e, Address id, ManagedMessagingService ms,
-                             Serializer ser, InterfaceParticipante valores, Locking lockA){
+                             Serializer ser, InterfaceParticipante valores, Locking lockA,
+                             ScheduledExecutorService ses){
 
-        super(e,id,ms,ser);
+        super(e,id,ms,ser, ses);
 
         log = SegmentedJournal.builder()
                 .withName("exemploIDParticipante" + this.meuEnd)
@@ -268,7 +266,7 @@ class TwoPCParticipante extends TwoPC{
         recuperaLogParticipante();
 
         ms.registerHandler("preparedCoordenador", (a,m)-> {
-            System.out.println("Recebi prepared!");
+            System.out.println("Recebi prepared no participante!");
             try{
                 Msg nova = s.decode(m);
 
@@ -338,7 +336,7 @@ class TwoPCParticipante extends TwoPC{
                 //aqui podemos ver se ja n tem resposta sendo A
                 Msg paraMandar = new Msg(nova.id,null);
                 //Só depois de enviar o prepared é que eu vou fazer o lock, ou fazemos antes? Antes
-                System.out.println("Posso enviar!");
+                System.out.println("Posso enviar prepared ao coordenador: " + nova.id.coordenador + "!\n\n");
                 enviaPrepared(paraMandar, Address.from(paraMandar.id.coordenador));
             });
             /**
@@ -449,38 +447,6 @@ class TwoPCParticipante extends TwoPC{
 
         }, es);
 
-
-        ms.registerHandler("getCoordenador", (a,m) -> {
-
-
-            System.out.println("Sou o participante e recebi um pedido get");
-
-            MsgGet mg = s.decode(m);
-
-            // Mapa para devolver ao coordenador
-
-            Object val = new HashMap<>();
-
-
-            Collection <Long> chaves = (Collection<Long>) mg.valores;
-
-            // Pedir ao controlaParticipante os valores
-
-            val = this.valores.devolveValores(chaves);
-
-            System.out.println("Mapa val apos ser preenchido com valores : " + val.toString());
-
-
-            // Crio uma nova msgGet com o id do pedidoGet, os valores que me foram pedidos
-
-            MsgGet msgGet = new MsgGet(mg.idPedidoGet, val);
-
-            // Envio essa msgGet para o coordenador, que foi quem me enviou a mensagem
-
-            enviaMensagemGet (msgGet, "getResposta", a);
-
-
-        }, es);
     }
 }
 

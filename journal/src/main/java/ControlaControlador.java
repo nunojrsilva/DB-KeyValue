@@ -9,7 +9,7 @@ public class ControlaControlador implements InterfaceControlador {
 
     public ArrayList<Address> parts = new ArrayList<>();
 
-    public ControlaControlador(Address[] end){
+    public ControlaControlador(ArrayList<Address> end){
         for(Address a: end){
             parts.add(a);
         }

@@ -127,6 +127,7 @@ class PedidoGet implements Pedido{
     public boolean finalizado;
     public Object resultado;
     public String id;
+    public boolean sucesso = true;
 
     public PedidoGet ( Object keys, String id) {
         this.keys = keys;
@@ -198,5 +199,11 @@ class ExcecaoGet extends Exception {
         super();
         this.idPedidoGet = idpg;
         erro = "Pedido Get excedeu o tempo limite!\n";
+    }
+
+    @Override
+    public String toString() {
+        return "Id: " + idPedidoGet + " -> " + erro;
+
     }
 }
