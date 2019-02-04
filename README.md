@@ -1,2 +1,3 @@
 # DB-KeyValue
-Repositório do Trabalho Prático de FSD
+
+Distributed Key-Value pair storage system using Java and Atomix
